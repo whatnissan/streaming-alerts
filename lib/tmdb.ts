@@ -3,6 +3,27 @@ import { MediaItem, STREAMING_SERVICES } from './types';
 const RAPIDAPI_KEY = process.env.NEXT_PUBLIC_RAPIDAPI_KEY || '';
 const API_HOST = 'streaming-availability.p.rapidapi.com';
 
+async function getShowDetails(showId: string): Promise<any> {
+  try {
+    const response = await fetch(
+      `https://${API_HOST}/shows/${showId}?output_language=en`,
+      {
+        headers: {
+          'X-RapidAPI-Key': RAPIDAPI_KEY,
+          'X-RapidAPI-Host': API_HOST,
+        },
+        cache: 'no-store'
+      }
+    );
+    
+    if (!response.ok) return null;
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching show details:', error);
+    return null;
+  }
+}
+
 export async function getUpcomingContent(mediaType: 'movie' | 'tv'): Promise<MediaItem[]> {
   try {
     const showType = mediaType === 'movie' ? 'movie' : 'series';
@@ -27,25 +48,34 @@ export async function getUpcomingContent(mediaType: 'movie' | 'tv'): Promise<Med
         
         if (!data.changes || data.changes.length === 0) continue;
         
-        const items = data.changes.map((change: any) => ({
-          id: change.showId || change.id || Math.random().toString(),
-          title: change.show?.title || change.title || 'Untitled',
-          overview: change.show?.overview || change.overview || 'No description available',
-          poster_path: change.show?.imageSet?.verticalPoster?.w240 || change.imageSet?.verticalPoster?.w240 || null,
-          release_date: change.timestamp ? new Date(change.timestamp * 1000).toISOString().split('T')[0] : '',
-          vote_average: change.show?.rating || change.rating || 0,
-          genre_ids: change.show?.genres?.map((g: any) => g.id) || change.genres?.map((g: any) => g.id) || [],
-          media_type: mediaType,
-          providers: [STREAMING_SERVICES[service as keyof typeof STREAMING_SERVICES]],
-          service: STREAMING_SERVICES[service as keyof typeof STREAMING_SERVICES],
-          availableDate: change.timestamp ? new Date(change.timestamp * 1000).toLocaleDateString('en-US', { 
-            month: 'short', 
-            day: 'numeric', 
-            year: 'numeric' 
-          }) : 'TBA'
-        }));
-        
-        allContent.push(...items);
+        // Fetch full details for each show (limit to first 5 per service to avoid rate limits)
+        for (const change of data.changes.slice(0, 5)) {
+          try {
+            const showDetails = await getShowDetails(change.showId);
+            
+            if (showDetails) {
+              allContent.push({
+                id: showDetails.id,
+                title: showDetails.title,
+                overview: showDetails.overview || 'No description available',
+                poster_path: showDetails.imageSet?.verticalPoster?.w240 || showDetails.imageSet?.verticalPoster?.w360 || null,
+                release_date: change.timestamp ? new Date(change.timestamp * 1000).toISOString().split('T')[0] : '',
+                vote_average: showDetails.rating || 0,
+                genre_ids: showDetails.genres?.map((g: any) => g.id) || [],
+                media_type: mediaType,
+                providers: [STREAMING_SERVICES[service as keyof typeof STREAMING_SERVICES]],
+                service: STREAMING_SERVICES[service as keyof typeof STREAMING_SERVICES],
+                availableDate: change.timestamp ? new Date(change.timestamp * 1000).toLocaleDateString('en-US', { 
+                  month: 'short', 
+                  day: 'numeric', 
+                  year: 'numeric' 
+                }) : 'TBA'
+              });
+            }
+          } catch (err) {
+            console.error('Error processing show:', err);
+          }
+        }
       } catch (err) {
         console.error(`Error fetching ${service}:`, err);
       }
