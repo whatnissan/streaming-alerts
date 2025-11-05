@@ -19,7 +19,6 @@ async function getShowDetails(showId: string): Promise<any> {
     if (!response.ok) return null;
     return await response.json();
   } catch (error) {
-    console.error('Error fetching show details:', error);
     return null;
   }
 }
@@ -30,6 +29,7 @@ export async function getUpcomingContent(mediaType: 'movie' | 'tv'): Promise<Med
     const services = ['netflix', 'prime', 'disney', 'hbo', 'apple'];
     const allContent: MediaItem[] = [];
     
+    // Try to get upcoming content first
     for (const service of services) {
       try {
         const url = `https://${API_HOST}/changes?change_type=upcoming&item_type=show&catalogs=${service}&show_type=${showType}&country=us&output_language=en`;
@@ -48,8 +48,8 @@ export async function getUpcomingContent(mediaType: 'movie' | 'tv'): Promise<Med
         
         if (!data.changes || data.changes.length === 0) continue;
         
-        // Fetch full details for each show (limit to first 5 per service to avoid rate limits)
-        for (const change of data.changes.slice(0, 5)) {
+        // Fetch details for upcoming shows
+        for (const change of data.changes.slice(0, 3)) {
           try {
             const showDetails = await getShowDetails(change.showId);
             
@@ -81,16 +81,84 @@ export async function getUpcomingContent(mediaType: 'movie' | 'tv'): Promise<Med
       }
     }
     
-    if (allContent.length === 0) {
-      return await getPopularContent(mediaType);
-    }
+    // If we have some upcoming content, also get recent additions
+    const recentContent = await getRecentlyAddedContent(mediaType);
+    allContent.push(...recentContent);
     
-    return allContent.sort((a, b) => 
+    // Remove duplicates
+    const uniqueContent = Array.from(
+      new Map(allContent.map(item => [item.id, item])).values()
+    );
+    
+    return uniqueContent.sort((a, b) => 
       new Date(a.release_date).getTime() - new Date(b.release_date).getTime()
     );
   } catch (error) {
     console.error('Error in getUpcomingContent:', error);
-    return await getPopularContent(mediaType);
+    return await getRecentlyAddedContent(mediaType);
+  }
+}
+
+async function getRecentlyAddedContent(mediaType: 'movie' | 'tv'): Promise<MediaItem[]> {
+  try {
+    const showType = mediaType === 'movie' ? 'movie' : 'series';
+    const services = ['netflix', 'prime', 'disney', 'hbo', 'apple'];
+    const allContent: MediaItem[] = [];
+    
+    for (const service of services) {
+      try {
+        const url = `https://${API_HOST}/changes?change_type=new&item_type=show&catalogs=${service}&show_type=${showType}&country=us&output_language=en`;
+        
+        const response = await fetch(url, {
+          headers: {
+            'X-RapidAPI-Key': RAPIDAPI_KEY,
+            'X-RapidAPI-Host': API_HOST,
+          },
+          cache: 'no-store'
+        });
+        
+        if (!response.ok) continue;
+        
+        const data = await response.json();
+        
+        if (!data.changes || data.changes.length === 0) continue;
+        
+        // Get recently added shows (last 5 per service)
+        for (const change of data.changes.slice(0, 5)) {
+          try {
+            const showDetails = await getShowDetails(change.showId);
+            
+            if (showDetails) {
+              allContent.push({
+                id: showDetails.id,
+                title: showDetails.title,
+                overview: showDetails.overview || 'No description available',
+                poster_path: showDetails.imageSet?.verticalPoster?.w240 || showDetails.imageSet?.verticalPoster?.w360 || null,
+                release_date: change.timestamp ? new Date(change.timestamp * 1000).toISOString().split('T')[0] : '',
+                vote_average: showDetails.rating || 0,
+                genre_ids: showDetails.genres?.map((g: any) => g.id) || [],
+                media_type: mediaType,
+                providers: [STREAMING_SERVICES[service as keyof typeof STREAMING_SERVICES]],
+                service: STREAMING_SERVICES[service as keyof typeof STREAMING_SERVICES],
+                availableDate: change.timestamp ? 'Added ' + new Date(change.timestamp * 1000).toLocaleDateString('en-US', { 
+                  month: 'short', 
+                  day: 'numeric'
+                }) : 'Recently Added'
+              });
+            }
+          } catch (err) {
+            console.error('Error processing recent show:', err);
+          }
+        }
+      } catch (err) {
+        console.error(`Error fetching recent from ${service}:`, err);
+      }
+    }
+    
+    return allContent;
+  } catch (error) {
+    console.error('Error in getRecentlyAddedContent:', error);
+    return [];
   }
 }
 

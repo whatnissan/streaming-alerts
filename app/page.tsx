@@ -67,7 +67,7 @@ export default function Home() {
             🎬 Streaming Alerts
           </h1>
           <p className="text-gray-600 dark:text-gray-400 text-lg">
-            See what's coming soon to Netflix, Prime, Disney+, HBO Max & Apple TV+
+            New & upcoming on Netflix, Prime, Disney+, HBO Max & Apple TV+
           </p>
         </header>
 
@@ -87,7 +87,7 @@ export default function Home() {
             {searchQuery ? (
               <p>Found {filteredContent.length} results for "{searchQuery}"</p>
             ) : (
-              <p>Showing {filteredContent.length} upcoming {mediaType === 'movie' ? 'movies' : 'TV shows'}</p>
+              <p>Showing {filteredContent.length} {mediaType === 'movie' ? 'movies' : 'TV shows'}</p>
             )}
           </div>
         )}
@@ -115,7 +115,7 @@ export default function Home() {
               No results found
             </h3>
             <p className="text-gray-600 dark:text-gray-400">
-              {searchQuery ? "Try a different search" : "No upcoming content found for these filters"}
+              {searchQuery ? "Try a different search" : "Try adjusting your filters"}
             </p>
           </div>
         )}
