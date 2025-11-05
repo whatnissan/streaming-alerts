@@ -13,8 +13,6 @@ export async function getUpcomingContent(mediaType: 'movie' | 'tv'): Promise<Med
       try {
         const url = `https://${API_HOST}/changes?change_type=upcoming&item_type=show&catalogs=${service}&show_type=${showType}&country=us&output_language=en`;
         
-        console.log('Fetching:', url);
-        
         const response = await fetch(url, {
           headers: {
             'X-RapidAPI-Key': RAPIDAPI_KEY,
@@ -22,31 +20,21 @@ export async function getUpcomingContent(mediaType: 'movie' | 'tv'): Promise<Med
           },
           cache: 'no-store'
         });
-
-        console.log('Response status:', response.status);
         
-        if (!response.ok) {
-          const error = await response.text();
-          console.error(`Error from ${service}:`, error);
-          continue;
-        }
+        if (!response.ok) continue;
         
         const data = await response.json();
-        console.log(`Data from ${service}:`, data);
         
-        if (!data.changes || data.changes.length === 0) {
-          console.log(`No upcoming content for ${service}`);
-          continue;
-        }
+        if (!data.changes || data.changes.length === 0) continue;
         
         const items = data.changes.map((change: any) => ({
-          id: change.showId || Math.random().toString(),
-          title: change.title || 'Untitled',
-          overview: change.overview || 'No description available',
-          poster_path: change.imageSet?.verticalPoster?.w240 || change.imageSet?.verticalPoster?.w360 || null,
+          id: change.showId || change.id || Math.random().toString(),
+          title: change.show?.title || change.title || 'Untitled',
+          overview: change.show?.overview || change.overview || 'No description available',
+          poster_path: change.show?.imageSet?.verticalPoster?.w240 || change.imageSet?.verticalPoster?.w240 || null,
           release_date: change.timestamp ? new Date(change.timestamp * 1000).toISOString().split('T')[0] : '',
-          vote_average: change.rating || 0,
-          genre_ids: change.genres?.map((g: any) => g.id) || [],
+          vote_average: change.show?.rating || change.rating || 0,
+          genre_ids: change.show?.genres?.map((g: any) => g.id) || change.genres?.map((g: any) => g.id) || [],
           media_type: mediaType,
           providers: [STREAMING_SERVICES[service as keyof typeof STREAMING_SERVICES]],
           service: STREAMING_SERVICES[service as keyof typeof STREAMING_SERVICES],
@@ -58,17 +46,12 @@ export async function getUpcomingContent(mediaType: 'movie' | 'tv'): Promise<Med
         }));
         
         allContent.push(...items);
-        console.log(`Added ${items.length} items from ${service}`);
       } catch (err) {
         console.error(`Error fetching ${service}:`, err);
       }
     }
     
-    console.log(`Total items: ${allContent.length}`);
-    
-    // If no upcoming content, fetch current popular content instead
     if (allContent.length === 0) {
-      console.log('No upcoming content found, fetching popular content...');
       return await getPopularContent(mediaType);
     }
     
@@ -102,14 +85,14 @@ async function getPopularContent(mediaType: 'movie' | 'tv'): Promise<MediaItem[]
         if (!response.ok) continue;
         
         const data = await response.json();
-        const shows = data.shows || data || [];
+        const shows = data.shows || [];
         
         const items = shows.slice(0, 10).map((show: any) => ({
           id: show.id,
           title: show.title,
           overview: show.overview || 'No description available',
-          poster_path: show.imageSet?.verticalPoster?.w240 || null,
-          release_date: show.releaseYear ? `${show.releaseYear}-01-01` : '',
+          poster_path: show.imageSet?.verticalPoster?.w240 || show.imageSet?.verticalPoster?.w360 || null,
+          release_date: show.releaseYear ? `${show.releaseYear}-01-01` : show.firstAirYear ? `${show.firstAirYear}-01-01` : '',
           vote_average: show.rating || 0,
           genre_ids: show.genres?.map((g: any) => g.id) || [],
           media_type: mediaType,
@@ -160,13 +143,13 @@ export async function searchContent(query: string, mediaType: 'movie' | 'tv'): P
         id: show.id,
         title: show.title,
         overview: show.overview || 'No description available',
-        poster_path: show.imageSet?.verticalPoster?.w240 || null,
-        release_date: show.releaseYear ? `${show.releaseYear}-01-01` : '',
+        poster_path: show.imageSet?.verticalPoster?.w240 || show.imageSet?.verticalPoster?.w360 || null,
+        release_date: show.releaseYear ? `${show.releaseYear}-01-01` : show.firstAirYear ? `${show.firstAirYear}-01-01` : '',
         vote_average: show.rating || 0,
         genre_ids: show.genres?.map((g: any) => g.id) || [],
         media_type: mediaType,
         providers: services,
-        service: services[0] || 'Available on streaming'
+        service: services.length > 0 ? services.join(', ') : 'Available on streaming'
       };
     });
   } catch (error) {
