@@ -8,6 +8,7 @@ export interface Movie {
   vote_average: number;
   genre_ids: number[];
   media_type?: 'movie' | 'tv';
+  providers?: number[];
 }
 
 export interface TVShow {
@@ -20,11 +21,13 @@ export interface TVShow {
   vote_average: number;
   genre_ids: number[];
   media_type?: 'movie' | 'tv';
+  providers?: number[];
 }
 
 export type MediaItem = (Movie | TVShow) & {
   media_type: 'movie' | 'tv';
   streamingService?: string;
+  providers?: number[];
 };
 
 export interface Genre {

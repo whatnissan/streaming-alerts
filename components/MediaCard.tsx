@@ -1,6 +1,6 @@
 'use client';
 
-import { MediaItem, GENRES } from '@/lib/types';
+import { MediaItem, GENRES, STREAMING_PROVIDERS } from '@/lib/types';
 import { getImageUrl, getTitle, getReleaseDate, formatDate } from '@/lib/tmdb';
 import { useState } from 'react';
 
@@ -20,6 +20,10 @@ export default function MediaCard({ item }: MediaCardProps) {
     .map((id) => GENRES[id as keyof typeof GENRES])
     .filter(Boolean)
     .join(', ');
+
+  const streamingServices = item.providers
+    ?.map((id) => STREAMING_PROVIDERS[id as keyof typeof STREAMING_PROVIDERS])
+    .filter(Boolean) || [];
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden hover:shadow-xl transition-shadow duration-300">
@@ -70,6 +74,25 @@ export default function MediaCard({ item }: MediaCardProps) {
         {genres && (
           <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
             {genres}
+          </p>
+        )}
+
+        {streamingServices.length > 0 && (
+          <div className="mb-2">
+            <p className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Streaming on:</p>
+            <div className="flex flex-wrap gap-1">
+              {streamingServices.map((service, index) => (
+                <span key={index} className="text-xs bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-2 py-1 rounded">
+                  {service}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {streamingServices.length === 0 && (
+          <p className="text-xs text-gray-400 dark:text-gray-500 mb-2 italic">
+            Streaming info not available
           </p>
         )}
         
