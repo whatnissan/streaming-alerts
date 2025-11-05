@@ -1,76 +1,72 @@
-export interface Movie {
-  id: number;
+export interface StreamingShow {
+  id: string;
+  title: string;
+  overview: string;
+  imageSet?: {
+    verticalPoster?: {
+      w240?: string;
+      w360?: string;
+      w480?: string;
+      w600?: string;
+      w720?: string;
+    };
+  };
+  releaseYear?: number;
+  genres?: Array<{ id: string; name: string }>;
+  rating?: number;
+  streamingInfo?: {
+    [country: string]: {
+      [service: string]: Array<{
+        type: string;
+        streamingType: string;
+        availableSince?: number;
+      }>;
+    };
+  };
+  showType: 'movie' | 'series';
+}
+
+export interface MediaItem {
+  id: string;
   title: string;
   overview: string;
   poster_path: string | null;
-  backdrop_path: string | null;
   release_date: string;
   vote_average: number;
-  genre_ids: number[];
-  media_type?: 'movie' | 'tv';
-  providers?: number[];
-}
-
-export interface TVShow {
-  id: number;
-  name: string;
-  overview: string;
-  poster_path: string | null;
-  backdrop_path: string | null;
-  first_air_date: string;
-  vote_average: number;
-  genre_ids: number[];
-  media_type?: 'movie' | 'tv';
-  providers?: number[];
-}
-
-export type MediaItem = (Movie | TVShow) & {
+  genre_ids: string[];
   media_type: 'movie' | 'tv';
-  streamingService?: string;
-  providers?: number[];
-};
-
-export interface Genre {
-  id: number;
-  name: string;
+  providers?: string[];
+  service?: string;
+  availableDate?: string;
 }
 
-export const STREAMING_PROVIDERS = {
-  8: 'Netflix',
-  9: 'Amazon Prime Video',
-  15: 'Hulu',
-  531: 'Paramount+',
-  384: 'HBO Max',
-  337: 'Disney+',
-  350: 'Apple TV+',
+export const STREAMING_SERVICES = {
+  'netflix': 'Netflix',
+  'prime': 'Amazon Prime Video',
+  'hulu': 'Hulu',
+  'paramount': 'Paramount+',
+  'hbo': 'HBO Max',
+  'disney': 'Disney+',
+  'apple': 'Apple TV+',
 } as const;
 
 export const GENRES = {
-  28: 'Action',
-  12: 'Adventure',
-  16: 'Animation',
-  35: 'Comedy',
-  80: 'Crime',
-  99: 'Documentary',
-  18: 'Drama',
-  10751: 'Family',
-  14: 'Fantasy',
-  36: 'History',
-  27: 'Horror',
-  10402: 'Music',
-  9648: 'Mystery',
-  10749: 'Romance',
-  878: 'Science Fiction',
-  10770: 'TV Movie',
-  53: 'Thriller',
-  10752: 'War',
-  37: 'Western',
-  10759: 'Action & Adventure',
-  10762: 'Kids',
-  10763: 'News',
-  10764: 'Reality',
-  10765: 'Sci-Fi & Fantasy',
-  10766: 'Soap',
-  10767: 'Talk',
-  10768: 'War & Politics',
+  'action': 'Action',
+  'adventure': 'Adventure',
+  'animation': 'Animation',
+  'comedy': 'Comedy',
+  'crime': 'Crime',
+  'documentary': 'Documentary',
+  'drama': 'Drama',
+  'family': 'Family',
+  'fantasy': 'Fantasy',
+  'history': 'History',
+  'horror': 'Horror',
+  'music': 'Music',
+  'mystery': 'Mystery',
+  'romance': 'Romance',
+  'scifi': 'Science Fiction',
+  'thriller': 'Thriller',
+  'war': 'War',
+  'western': 'Western',
 } as const;

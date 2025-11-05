@@ -1,110 +1,149 @@
-import { MediaItem, STREAMING_PROVIDERS } from './types';
+import { MediaItem, STREAMING_SERVICES } from './types';
 
-const TMDB_API_KEY = process.env.NEXT_PUBLIC_TMDB_API_KEY || 'YOUR_API_KEY_HERE';
-const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
+const RAPIDAPI_KEY = process.env.NEXT_PUBLIC_RAPIDAPI_KEY || '';
+const API_HOST = 'streaming-availability.p.rapidapi.com';
 
-export async function getUpcomingContent(mediaType: 'movie' | 'tv', page: number = 1): Promise<MediaItem[]> {
+interface StreamingChange {
+  itemType: string;
+  showType: string;
+  showId: string;
+  title: string;
+  overview: string;
+  firstAirYear?: number;
+  releaseYear?: number;
+  imageSet?: {
+    verticalPoster?: {
+      w240?: string;
+    };
+  };
+  service: string;
+  streamingType: string;
+  changeType: string;
+  timestamp: number;
+  genres?: Array<{ id: string; name: string }>;
+  rating?: number;
+}
+
+export async function getUpcomingContent(mediaType: 'movie' | 'tv'): Promise<MediaItem[]> {
   try {
-    const endpoint = mediaType === 'movie' ? `${TMDB_BASE_URL}/movie/upcoming` : `${TMDB_BASE_URL}/tv/on_the_air`;
-    const response = await fetch(`${endpoint}?api_key=${TMDB_API_KEY}&page=${page}&region=US`, { next: { revalidate: 3600 } });
-    if (!response.ok) throw new Error('Failed to fetch');
-    const data = await response.json();
+    const services = ['netflix', 'prime', 'disney', 'hbo', 'apple'];
+    const allContent: MediaItem[] = [];
     
-    // Fetch streaming providers for each item
-    const itemsWithProviders = await Promise.all(
-      data.results.slice(0, 20).map(async (item: any) => {
-        const providers = await getStreamingProviders(mediaType, item.id);
-        return {
-          ...item,
+    for (const service of services) {
+      try {
+        const response = await fetch(
+          `https://${API_HOST}/changes?change_type=upcoming&item_type=show&catalogs=${service}&show_type=${mediaType === 'movie' ? 'movie' : 'series'}&country=us&output_language=en`,
+          {
+            headers: {
+              'X-RapidAPI-Key': RAPIDAPI_KEY,
+              'X-RapidAPI-Host': API_HOST,
+            },
+            next: { revalidate: 3600 }
+          }
+        );
+
+        if (!response.ok) continue;
+        
+        const data = await response.json();
+        const changes: StreamingChange[] = data.changes || [];
+        
+        const items = changes.map((change) => ({
+          id: change.showId,
+          title: change.title,
+          overview: change.overview || 'No description available',
+          poster_path: change.imageSet?.verticalPoster?.w240 || null,
+          release_date: new Date(change.timestamp * 1000).toISOString().split('T')[0],
+          vote_average: change.rating || 0,
+          genre_ids: change.genres?.map(g => g.id) || [],
           media_type: mediaType,
-          providers: providers
-        };
-      })
-    );
+          providers: [STREAMING_SERVICES[service as keyof typeof STREAMING_SERVICES]],
+          service: STREAMING_SERVICES[service as keyof typeof STREAMING_SERVICES],
+          availableDate: new Date(change.timestamp * 1000).toLocaleDateString('en-US', { 
+            month: 'short', 
+            day: 'numeric', 
+            year: 'numeric' 
+          })
+        }));
+        
+        allContent.push(...items);
+      } catch (err) {
+        console.error(`Error fetching ${service}:`, err);
+      }
+    }
     
-    return itemsWithProviders;
+    return allContent.sort((a, b) => 
+      new Date(a.release_date).getTime() - new Date(b.release_date).getTime()
+    );
   } catch (error) {
     console.error('Error fetching content:', error);
     return [];
   }
 }
 
-export async function searchContent(query: string): Promise<MediaItem[]> {
+export async function searchContent(query: string, mediaType: 'movie' | 'tv'): Promise<MediaItem[]> {
   if (!query.trim()) return [];
-  try {
-    const response = await fetch(`${TMDB_BASE_URL}/search/multi?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}&page=1`, { next: { revalidate: 3600 } });
-    if (!response.ok) throw new Error('Failed to search');
-    const data = await response.json();
-    
-    const results = data.results.filter((item: any) => item.media_type === 'movie' || item.media_type === 'tv');
-    
-    // Fetch streaming providers for search results
-    const itemsWithProviders = await Promise.all(
-      results.slice(0, 20).map(async (item: any) => {
-        const providers = await getStreamingProviders(item.media_type, item.id);
-        return {
-          ...item,
-          providers: providers
-        };
-      })
-    );
-    
-    return itemsWithProviders;
-  } catch (error) {
-    console.error('Error searching content:', error);
-    return [];
-  }
-}
-
-export async function getStreamingProviders(mediaType: 'movie' | 'tv', id: number): Promise<number[]> {
+  
   try {
     const response = await fetch(
-      `${TMDB_BASE_URL}/${mediaType}/${id}/watch/providers?api_key=${TMDB_API_KEY}`,
-      { next: { revalidate: 86400 } }
+      `https://${API_HOST}/shows/search/title?title=${encodeURIComponent(query)}&country=us&show_type=${mediaType === 'movie' ? 'movie' : 'series'}&output_language=en`,
+      {
+        headers: {
+          'X-RapidAPI-Key': RAPIDAPI_KEY,
+          'X-RapidAPI-Host': API_HOST,
+        },
+        next: { revalidate: 3600 }
+      }
     );
-    
+
     if (!response.ok) return [];
     
-    const data = await response.json();
-    const usProviders = data.results?.US;
+    const shows = await response.json();
     
-    if (!usProviders) return [];
-    
-    const providers: number[] = [];
-    
-    ['flatrate', 'buy', 'rent'].forEach((type) => {
-      if (usProviders[type]) {
-        usProviders[type].forEach((provider: any) => {
-          if (!providers.includes(provider.provider_id)) {
-            providers.push(provider.provider_id);
-          }
-        });
-      }
+    return shows.slice(0, 20).map((show: any) => {
+      const usStreaming = show.streamingInfo?.us || {};
+      const services = Object.keys(usStreaming)
+        .filter(s => STREAMING_SERVICES[s as keyof typeof STREAMING_SERVICES])
+        .map(s => STREAMING_SERVICES[s as keyof typeof STREAMING_SERVICES]);
+
+      return {
+        id: show.id,
+        title: show.title,
+        overview: show.overview || 'No description available',
+        poster_path: show.imageSet?.verticalPoster?.w240 || null,
+        release_date: show.releaseYear ? `${show.releaseYear}-01-01` : '',
+        vote_average: show.rating || 0,
+        genre_ids: show.genres?.map((g: any) => g.id) || [],
+        media_type: mediaType,
+        providers: services,
+        service: services[0] || 'Multiple Services'
+      };
     });
-    
-    return providers;
   } catch (error) {
+    console.error('Error searching:', error);
     return [];
   }
 }
 
-export function getImageUrl(path: string | null, size: 'w500' | 'original' = 'w500'): string {
-  if (!path) return '/placeholder.png';
-  return `https://image.tmdb.org/t/p/${size}${path}`;
+export function getImageUrl(path: string | null): string {
+  return path || '/placeholder.png';
 }
 
 export function getTitle(item: MediaItem): string {
-  return 'title' in item ? item.title : item.name;
+  return item.title;
 }
 
 export function getReleaseDate(item: MediaItem): string {
-  return 'release_date' in item ? item.release_date : item.first_air_date;
+  return item.release_date;
 }
 
 export function formatDate(dateString: string): string {
   if (!dateString) return 'TBA';
   const date = new Date(dateString);
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  return date.toLocaleDateString('en-US', { 
+    month: 'short', 
+    day: 'numeric', 
+    year: 'numeric' 
+  });
 }
 
 export function filterByDate(items: MediaItem[], filter: string): MediaItem[] {
@@ -113,12 +152,17 @@ export function filterByDate(items: MediaItem[], filter: string): MediaItem[] {
   const oneMonth = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
   
   return items.filter((item) => {
-    const releaseDate = new Date(getReleaseDate(item));
+    const releaseDate = new Date(item.release_date);
+    
     switch (filter) {
-      case 'this-week': return releaseDate >= now && releaseDate <= oneWeek;
-      case 'this-month': return releaseDate >= now && releaseDate <= oneMonth;
-      case 'coming-soon': return releaseDate > oneMonth;
-      default: return true;
+      case 'this-week':
+        return releaseDate >= now && releaseDate <= oneWeek;
+      case 'this-month':
+        return releaseDate >= now && releaseDate <= oneMonth;
+      case 'coming-soon':
+        return releaseDate > oneMonth;
+      default:
+        return true;
     }
   });
 }

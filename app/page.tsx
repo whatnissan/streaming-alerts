@@ -14,7 +14,6 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   
-  const [selectedService, setSelectedService] = useState('all');
   const [selectedGenre, setSelectedGenre] = useState('all');
   const [dateFilter, setDateFilter] = useState('all');
 
@@ -22,7 +21,7 @@ export default function Home() {
     const fetchContent = async () => {
       setLoading(true);
       setSearchQuery('');
-      const data = await getUpcomingContent(mediaType, 1);
+      const data = await getUpcomingContent(mediaType);
       setContent(data);
       setLoading(false);
     };
@@ -34,8 +33,7 @@ export default function Home() {
     if (searchQuery) return;
     if (dateFilter !== 'all') filtered = filterByDate(filtered, dateFilter);
     if (selectedGenre !== 'all') {
-      const genreId = parseInt(selectedGenre);
-      filtered = filtered.filter((item) => item.genre_ids?.includes(genreId));
+      filtered = filtered.filter((item) => item.genre_ids?.includes(selectedGenre));
     }
     filtered.sort((a, b) => {
       const dateA = new Date(getReleaseDate(a)).getTime();
@@ -43,7 +41,7 @@ export default function Home() {
       return dateA - dateB;
     });
     setFilteredContent(filtered);
-  }, [content, dateFilter, selectedGenre, selectedService, searchQuery]);
+  }, [content, dateFilter, selectedGenre, searchQuery]);
 
   const handleSearch = async (query: string) => {
     setSearchQuery(query);
@@ -52,11 +50,10 @@ export default function Home() {
       return;
     }
     setLoading(true);
-    const results = await searchContent(query);
-    let filtered = results.filter((item) => item.media_type === mediaType);
+    const results = await searchContent(query, mediaType);
+    let filtered = results;
     if (selectedGenre !== 'all') {
-      const genreId = parseInt(selectedGenre);
-      filtered = filtered.filter((item) => item.genre_ids?.includes(genreId));
+      filtered = filtered.filter((item) => item.genre_ids?.includes(selectedGenre));
     }
     setFilteredContent(filtered);
     setLoading(false);
@@ -70,15 +67,13 @@ export default function Home() {
             🎬 Streaming Alerts
           </h1>
           <p className="text-gray-600 dark:text-gray-400 text-lg">
-            Discover upcoming movies and TV shows across all streaming platforms
+            See what's coming soon to Netflix, Prime, Disney+, HBO Max & Apple TV+
           </p>
         </header>
 
         <SearchBar onSearch={handleSearch} />
 
         <FilterBar
-          selectedService={selectedService}
-          setSelectedService={setSelectedService}
           selectedGenre={selectedGenre}
           setSelectedGenre={setSelectedGenre}
           dateFilter={dateFilter}
@@ -120,13 +115,13 @@ export default function Home() {
               No results found
             </h3>
             <p className="text-gray-600 dark:text-gray-400">
-              {searchQuery ? "Try adjusting your search or filters" : "Try adjusting your filters or check back later"}
+              {searchQuery ? "Try a different search" : "No upcoming content found for these filters"}
             </p>
           </div>
         )}
 
         <footer className="mt-16 text-center text-sm text-gray-500 dark:text-gray-400 border-t border-gray-200 dark:border-gray-700 pt-8">
-          <p>Data provided by TMDb (The Movie Database)</p>
+          <p>Data provided by Streaming Availability API</p>
         </footer>
       </div>
     </div>

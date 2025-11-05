@@ -1,10 +1,8 @@
 'use client';
 
-import { GENRES, STREAMING_PROVIDERS } from '@/lib/types';
+import { GENRES } from '@/lib/types';
 
 interface FilterBarProps {
-  selectedService: string;
-  setSelectedService: (service: string) => void;
   selectedGenre: string;
   setSelectedGenre: (genre: string) => void;
   dateFilter: string;
@@ -14,10 +12,8 @@ interface FilterBarProps {
 }
 
 export default function FilterBar({
-  selectedService, setSelectedService, selectedGenre, setSelectedGenre,
-  dateFilter, setDateFilter, mediaType, setMediaType,
+  selectedGenre, setSelectedGenre, dateFilter, setDateFilter, mediaType, setMediaType,
 }: FilterBarProps) {
-  const streamingServices = Object.entries(STREAMING_PROVIDERS);
   const genres = Object.entries(GENRES);
 
   return (
@@ -61,9 +57,9 @@ export default function FilterBar({
         </select>
       </div>
 
-      {(selectedService !== 'all' || selectedGenre !== 'all' || dateFilter !== 'all') && (
+      {(selectedGenre !== 'all' || dateFilter !== 'all') && (
         <button
-          onClick={() => { setSelectedService('all'); setSelectedGenre('all'); setDateFilter('all'); }}
+          onClick={() => { setSelectedGenre('all'); setDateFilter('all'); }}
           className="w-full px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
         >
           Reset Filters
