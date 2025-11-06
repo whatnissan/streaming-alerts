@@ -15,7 +15,6 @@ const SERVICE_MAP: { [key: number]: string } = {
   43: 'Showtime',
   201: 'Tubi',
   82: 'Pluto TV',
-  372: 'Disney+',
 };
 
 async function getOMDbRating(imdbId: string): Promise<string> {
@@ -144,7 +143,6 @@ export async function getUpcomingContent(mediaType: 'movie' | 'tv'): Promise<Med
         
         const details = await detailRes.json();
         
-        // Get streaming services if available
         let uniqueServices: string[] = [];
         let releaseDate = '';
         
@@ -154,7 +152,6 @@ export async function getUpcomingContent(mediaType: 'movie' | 'tv'): Promise<Med
             .map((s: any) => SERVICE_MAP[s.source_id]);
           uniqueServices = Array.from(new Set(serviceNames));
           
-          // Try to get release date from sources
           const upcomingSource = details.sources.find((s: any) => s.date_added);
           if (upcomingSource?.date_added) {
             const date = new Date(upcomingSource.date_added * 1000);
@@ -162,7 +159,6 @@ export async function getUpcomingContent(mediaType: 'movie' | 'tv'): Promise<Med
           }
         }
         
-        // Fallback to general release date
         if (!releaseDate && details.release_date) {
           const date = new Date(details.release_date);
           releaseDate = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
