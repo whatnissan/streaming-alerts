@@ -4,22 +4,31 @@ const TMDB_KEY = process.env.NEXT_PUBLIC_TMDB_KEY || '';
 const OMDB_KEY = process.env.NEXT_PUBLIC_OMDB_KEY || '';
 const TMDB_BASE = 'https://api.themoviedb.org/3';
 
+// Expanded provider map with all known IDs
 const PROVIDER_MAP: { [key: number]: string } = {
   8: 'Netflix',
   9: 'Amazon Prime',
+  10: 'Amazon Prime',
+  119: 'Amazon Prime',
   15: 'Hulu',
   531: 'Paramount+',
+  582: 'Paramount+',
   384: 'HBO Max',
   1899: 'Max',
+  387: 'HBO Max',
   337: 'Disney+',
+  390: 'Disney+',
   350: 'Apple TV+',
+  2: 'Apple TV+',
   386: 'Peacock',
+  387: 'Peacock',
   73: 'Tubi',
+  283: 'Tubi',
   43: 'Showtime',
-  47: 'Showtime',
   37: 'Showtime',
-  1853: 'Paramount+ with Showtime',
+  1853: 'Showtime',
   300: 'Pluto TV',
+  279: 'Pluto TV',
 };
 
 async function getOMDbRating(imdbId: string): Promise<string> {
@@ -41,6 +50,7 @@ export async function getTMDBStreaming(mediaType: 'movie' | 'tv'): Promise<Media
   try {
     const endpoint = mediaType === 'movie' ? 'movie/popular' : 'tv/popular';
     const allItems: MediaItem[] = [];
+    const unknownProviders = new Set<number>();
     
     console.log('📡 Fetching from TMDB...');
     
@@ -49,17 +59,12 @@ export async function getTMDBStreaming(mediaType: 'movie' | 'tv'): Promise<Media
       const response = await fetch(url, { cache: 'no-store' });
       
       if (!response.ok) {
-        console.error(`❌ TMDB page ${page} error: ${response.status} - ${response.statusText}`);
-        if (response.status === 401) {
-          console.error('🔑 Invalid TMDB API key! Check Railway variables.');
-        }
+        console.error(`❌ TMDB page ${page} error: ${response.status}`);
         continue;
       }
       
       const data = await response.json();
       const results = data.results || [];
-      
-      console.log(`✅ TMDB page ${page}: ${results.length} items`);
       
       for (const item of results) {
         try {
@@ -73,12 +78,22 @@ export async function getTMDBStreaming(mediaType: 'movie' | 'tv'): Promise<Media
           
           if (!usProviders) continue;
           
-          // Collect providers from all sources: flatrate (subscription), buy, rent, ads
+          // Collect ALL providers and log unknown ones
           const allProviders = [
             ...(usProviders.flatrate || []),
             ...(usProviders.free || []),
-            ...(usProviders.ads || [])
+            ...(usProviders.ads || []),
+            ...(usProviders.buy || []),
+            ...(usProviders.rent || [])
           ];
+          
+          // Log providers we don't recognize
+          allProviders.forEach((p: any) => {
+            if (!PROVIDER_MAP[p.provider_id]) {
+              unknownProviders.add(p.provider_id);
+              console.log(`🔍 Unknown provider ID ${p.provider_id}: ${p.provider_name}`);
+            }
+          });
           
           const serviceList = allProviders
             .filter((p: any) => PROVIDER_MAP[p.provider_id])
@@ -121,10 +136,6 @@ export async function getTMDBStreaming(mediaType: 'movie' | 'tv'): Promise<Media
             imdbId,
             year: (item.release_date || item.first_air_date)?.split('-')[0]
           });
-          
-          if (allItems.length % 20 === 0) {
-            console.log(`✓ Processed ${allItems.length} items...`);
-          }
         } catch (err) {
           console.error('Error processing item:', err);
         }
@@ -132,6 +143,7 @@ export async function getTMDBStreaming(mediaType: 'movie' | 'tv'): Promise<Media
     }
     
     console.log(`🎬 Total TMDB items: ${allItems.length}`);
+    console.log(`📊 Unknown provider IDs found: ${Array.from(unknownProviders).join(', ')}`);
     return allItems;
   } catch (error) {
     console.error('❌ TMDB error:', error);
@@ -163,8 +175,6 @@ export async function getTMDBUpcoming(mediaType: 'movie' | 'tv'): Promise<MediaI
       const data = await response.json();
       const results = data.results || [];
       
-      console.log(`✅ TMDB upcoming page ${page}: ${results.length} items`);
-      
       for (const item of results) {
         try {
           const providerUrl = `${TMDB_BASE}/${mediaType}/${item.id}/watch/providers?api_key=${TMDB_KEY}`;
@@ -181,7 +191,9 @@ export async function getTMDBUpcoming(mediaType: 'movie' | 'tv'): Promise<MediaI
               const allProviders = [
                 ...(usProviders.flatrate || []),
                 ...(usProviders.free || []),
-                ...(usProviders.ads || [])
+                ...(usProviders.ads || []),
+                ...(usProviders.buy || []),
+                ...(usProviders.rent || [])
               ];
               
               const providerServices = allProviders
