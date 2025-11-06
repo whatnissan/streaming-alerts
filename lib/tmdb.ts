@@ -1,17 +1,27 @@
 import { MediaItem } from './types';
 import { getTMDBStreaming, getTMDBUpcoming } from './tmdb-api';
+import { getTraktTrending, getTraktAnticipated } from './trakt-api';
 
 export async function getStreamingContent(mediaType: 'movie' | 'tv'): Promise<MediaItem[]> {
   try {
-    console.log('Using TMDB for streaming content...');
-    const tmdbContent = await getTMDBStreaming(mediaType);
+    console.log('Fetching from multiple sources...');
     
-    if (tmdbContent.length > 20) {
-      return tmdbContent;
-    }
+    // Fetch from both TMDB and Trakt in parallel
+    const [tmdbContent, traktContent] = await Promise.all([
+      getTMDBStreaming(mediaType),
+      getTraktTrending(mediaType)
+    ]);
     
-    console.log('TMDB had limited results');
-    return tmdbContent;
+    console.log(`TMDB: ${tmdbContent.length}, Trakt: ${traktContent.length}`);
+    
+    // Combine and remove duplicates by title
+    const allContent = [...tmdbContent, ...traktContent];
+    const uniqueContent = Array.from(
+      new Map(allContent.map(item => [item.title.toLowerCase(), item])).values()
+    );
+    
+    console.log(`Total unique streaming items: ${uniqueContent.length}`);
+    return uniqueContent;
   } catch (error) {
     console.error('Error:', error);
     return [];
@@ -20,15 +30,22 @@ export async function getStreamingContent(mediaType: 'movie' | 'tv'): Promise<Me
 
 export async function getUpcomingContent(mediaType: 'movie' | 'tv'): Promise<MediaItem[]> {
   try {
-    console.log('Using TMDB for upcoming content...');
-    const tmdbContent = await getTMDBUpcoming(mediaType);
+    console.log('Fetching upcoming from multiple sources...');
     
-    if (tmdbContent.length > 20) {
-      return tmdbContent;
-    }
+    const [tmdbContent, traktContent] = await Promise.all([
+      getTMDBUpcoming(mediaType),
+      getTraktAnticipated(mediaType)
+    ]);
     
-    console.log('Limited TMDB results');
-    return tmdbContent;
+    console.log(`TMDB upcoming: ${tmdbContent.length}, Trakt anticipated: ${traktContent.length}`);
+    
+    const allContent = [...tmdbContent, ...traktContent];
+    const uniqueContent = Array.from(
+      new Map(allContent.map(item => [item.title.toLowerCase(), item])).values()
+    );
+    
+    console.log(`Total unique upcoming items: ${uniqueContent.length}`);
+    return uniqueContent;
   } catch (error) {
     console.error('Error:', error);
     return [];
