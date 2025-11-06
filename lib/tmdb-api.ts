@@ -2,20 +2,22 @@ import { MediaItem } from './types';
 
 const TMDB_KEY = process.env.NEXT_PUBLIC_TMDB_KEY || '';
 const OMDB_KEY = process.env.NEXT_PUBLIC_OMDB_KEY || '';
-const OPENAI_KEY = process.env.NEXT_PUBLIC_OPENAI_KEY || '';
 const TMDB_BASE = 'https://api.themoviedb.org/3';
 
+// Updated comprehensive provider map
 const PROVIDER_MAP: { [key: number]: string } = {
   8: 'Netflix',
   9: 'Amazon Prime',
   10: 'Amazon Prime',
   119: 'Amazon Prime',
   15: 'Hulu',
+  16: 'Hulu',
   531: 'Paramount+',
   582: 'Paramount+',
+  1770: 'Paramount+',
   384: 'HBO Max',
   1899: 'Max',
-  387: 'HBO',
+  387: 'Max',
   31: 'HBO Max',
   118: 'HBO Max',
   337: 'Disney+',
@@ -23,11 +25,12 @@ const PROVIDER_MAP: { [key: number]: string } = {
   350: 'Apple TV+',
   2: 'Apple TV+',
   386: 'Peacock',
+  387: 'Peacock',
   73: 'Tubi',
   283: 'Tubi',
   43: 'Showtime',
   37: 'Showtime',
-  1853: 'Showtime',
+  1853: 'Paramount+ with Showtime',
   642: 'Showtime',
   300: 'Pluto TV',
   279: 'Pluto TV',
@@ -43,45 +46,6 @@ async function getOMDbRating(imdbId: string): Promise<string> {
   } catch { return ''; }
 }
 
-// Predict service based on patterns (no AI needed for most)
-function predictServiceFromPatterns(title: string, overview: string): string {
-  const text = (title + ' ' + overview).toLowerCase();
-  
-  // Netflix patterns
-  if (text.includes('netflix') || text.includes('stranger things') || text.includes('bridgerton')) {
-    return 'Netflix';
-  }
-  
-  // Disney+ patterns
-  if (text.includes('marvel') || text.includes('star wars') || text.includes('disney') || 
-      text.includes('pixar') || text.includes('mandalorian')) {
-    return 'Disney+';
-  }
-  
-  // Amazon Prime patterns
-  if (text.includes('amazon') || text.includes('prime video') || text.includes('rings of power')) {
-    return 'Amazon Prime';
-  }
-  
-  // Apple TV+ patterns
-  if (text.includes('apple') || text.includes('apple tv')) {
-    return 'Apple TV+';
-  }
-  
-  // HBO/Max patterns
-  if (text.includes('hbo') || text.includes('max') || text.includes('game of thrones') || 
-      text.includes('house of the dragon')) {
-    return 'Max';
-  }
-  
-  // Paramount+ patterns
-  if (text.includes('paramount') || text.includes('star trek')) {
-    return 'Paramount+';
-  }
-  
-  return 'TBA';
-}
-
 export async function getTMDBStreaming(mediaType: 'movie' | 'tv'): Promise<MediaItem[]> {
   if (!TMDB_KEY) {
     console.error('❌ TMDB API key not found!');
@@ -93,7 +57,7 @@ export async function getTMDBStreaming(mediaType: 'movie' | 'tv'): Promise<Media
     const allItems: MediaItem[] = [];
     const unknownProviders = new Set<number>();
     
-    console.log('📡 Fetching from TMDB...');
+    console.log('📡 Fetching streaming from TMDB...');
     
     for (let page = 1; page <= 5; page++) {
       const url = `${TMDB_BASE}/${endpoint}?api_key=${TMDB_KEY}&language=en-US&page=${page}`;
@@ -119,10 +83,13 @@ export async function getTMDBStreaming(mediaType: 'movie' | 'tv'): Promise<Media
           
           if (!usProviders) continue;
           
+          // Check ALL provider types
           const allProviders = [
             ...(usProviders.flatrate || []),
             ...(usProviders.free || []),
-            ...(usProviders.ads || [])
+            ...(usProviders.ads || []),
+            ...(usProviders.rent || []),
+            ...(usProviders.buy || [])
           ];
           
           allProviders.forEach((p: any) => {
@@ -179,9 +146,9 @@ export async function getTMDBStreaming(mediaType: 'movie' | 'tv'): Promise<Media
       }
     }
     
-    console.log(`🎬 Total TMDB items: ${allItems.length}`);
+    console.log(`🎬 Total TMDB streaming items: ${allItems.length}`);
     if (unknownProviders.size > 0) {
-      console.log(`📊 Unknown provider IDs: ${Array.from(unknownProviders).join(', ')}`);
+      console.log(`📊 Unknown provider IDs found: ${Array.from(unknownProviders).join(', ')}`);
     }
     return allItems;
   } catch (error) {
@@ -197,30 +164,45 @@ export async function getTMDBUpcoming(mediaType: 'movie' | 'tv'): Promise<MediaI
   }
   
   try {
-    const endpoint = mediaType === 'movie' ? 'movie/upcoming' : 'tv/on_the_air';
     const allItems: MediaItem[] = [];
     
-    console.log('📡 Fetching upcoming from TMDB...');
+    console.log('📡 Fetching upcoming streaming releases...');
     
-    for (let page = 1; page <= 5; page++) {
-      const url = `${TMDB_BASE}/${endpoint}?api_key=${TMDB_KEY}&language=en-US&page=${page}&region=US`;
+    // Get content from the last 3 months and next 6 months
+    const today = new Date();
+    const threeMonthsAgo = new Date(today.getTime() - 90 * 24 * 60 * 60 * 1000);
+    const sixMonthsFromNow = new Date(today.getTime() + 180 * 24 * 60 * 60 * 1000);
+    
+    const startDate = threeMonthsAgo.toISOString().split('T')[0];
+    const endDate = sixMonthsFromNow.toISOString().split('T')[0];
+    
+    // Use discover to find content with streaming providers
+    for (let page = 1; page <= 10; page++) {
+      const endpoint = mediaType === 'movie' ? 'discover/movie' : 'discover/tv';
+      const dateParam = mediaType === 'movie' ? 'primary_release_date' : 'first_air_date';
+      
+      const url = `${TMDB_BASE}/${endpoint}?api_key=${TMDB_KEY}&language=en-US&sort_by=popularity.desc&${dateParam}.gte=${startDate}&${dateParam}.lte=${endDate}&watch_region=US&page=${page}`;
+      
       const response = await fetch(url, { cache: 'no-store' });
       
       if (!response.ok) {
-        console.error(`❌ TMDB upcoming page ${page} error: ${response.status}`);
+        console.error(`❌ Page ${page} error: ${response.status}`);
         continue;
       }
       
       const data = await response.json();
       const results = data.results || [];
       
+      console.log(`📄 Page ${page}: ${results.length} results`);
+      
       for (const item of results) {
         try {
+          // Get provider info
           const providerUrl = `${TMDB_BASE}/${mediaType}/${item.id}/watch/providers?api_key=${TMDB_KEY}`;
           const providerRes = await fetch(providerUrl, { cache: 'no-store' });
           
           let services: string[] = [];
-          let serviceName = 'TBA';
+          let serviceName = 'Coming Soon';
           
           if (providerRes.ok) {
             const providerData = await providerRes.json();
@@ -244,30 +226,21 @@ export async function getTMDBUpcoming(mediaType: 'movie' | 'tv'): Promise<MediaI
             }
           }
           
-          // If no service found, try pattern matching
-          if (serviceName === 'TBA') {
-            serviceName = predictServiceFromPatterns(
-              item.title || item.name,
-              item.overview || ''
-            );
-            if (serviceName !== 'TBA') {
-              services = [serviceName];
-            }
-          }
-          
-          // Format the release date
+          // Get the release date
           const releaseDate = item.release_date || item.first_air_date;
-          let formattedDate = 'TBA';
+          if (!releaseDate) continue;
           
-          if (releaseDate) {
-            const date = new Date(releaseDate);
-            formattedDate = date.toLocaleDateString('en-US', { 
-              month: 'short', 
-              day: 'numeric',
-              year: 'numeric' 
-            });
-          }
+          const relDate = new Date(releaseDate);
+          const isUpcoming = relDate > today;
           
+          // Format date
+          const formattedDate = relDate.toLocaleDateString('en-US', { 
+            month: 'short', 
+            day: 'numeric',
+            year: 'numeric' 
+          });
+          
+          // Get IMDb info
           const detailUrl = `${TMDB_BASE}/${mediaType}/${item.id}/external_ids?api_key=${TMDB_KEY}`;
           const detailRes = await fetch(detailUrl, { cache: 'no-store' });
           let imdbId = '';
@@ -285,32 +258,44 @@ export async function getTMDBUpcoming(mediaType: 'movie' | 'tv'): Promise<MediaI
             ? item.genre_ids.map((id: number) => id.toString()) 
             : [];
           
-          allItems.push({
-            id: `tmdb-${item.id}`,
-            title: item.title || item.name,
-            overview: item.overview || 'No description available',
-            poster_path: item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : null,
-            release_date: releaseDate || '',
-            vote_average: item.vote_average || 0,
-            genre_ids: genreIds,
-            media_type: mediaType,
-            providers: services.length > 0 ? services : ['TBA'],
-            service: serviceName,
-            availableDate: formattedDate,
-            imdbRating,
-            imdbId,
-            year: releaseDate?.split('-')[0]
-          });
-          
-          console.log(`✓ ${item.title || item.name} - ${serviceName} on ${formattedDate}`);
+          // Only add if it has a service or is truly upcoming
+          if (serviceName !== 'Coming Soon' || isUpcoming) {
+            allItems.push({
+              id: `tmdb-${item.id}`,
+              title: item.title || item.name,
+              overview: item.overview || 'No description available',
+              poster_path: item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : null,
+              release_date: releaseDate,
+              vote_average: item.vote_average || 0,
+              genre_ids: genreIds,
+              media_type: mediaType,
+              providers: services.length > 0 ? services : ['Coming Soon'],
+              service: serviceName,
+              availableDate: `${isUpcoming ? 'Coming ' : 'Added '}${formattedDate}`,
+              imdbRating,
+              imdbId,
+              year: releaseDate.split('-')[0]
+            });
+            
+            console.log(`✓ ${item.title || item.name} - ${serviceName} on ${formattedDate}`);
+          }
         } catch (err) {
-          console.error('Error processing upcoming item:', err);
+          console.error('Error processing item:', err);
         }
       }
     }
     
-    console.log(`🎬 Total TMDB upcoming: ${allItems.length}`);
-    return allItems;
+    // Remove duplicates and sort by date
+    const uniqueItems = Array.from(
+      new Map(allItems.map(item => [item.id, item])).values()
+    ).sort((a, b) => {
+      const dateA = new Date(a.release_date).getTime();
+      const dateB = new Date(b.release_date).getTime();
+      return dateB - dateA; // Newest first
+    });
+    
+    console.log(`🎬 Total upcoming items: ${uniqueItems.length}`);
+    return uniqueItems;
   } catch (error) {
     console.error('❌ TMDB upcoming error:', error);
     return [];
