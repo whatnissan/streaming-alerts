@@ -4,36 +4,19 @@ const TMDB_KEY = process.env.NEXT_PUBLIC_TMDB_KEY || '';
 const OMDB_KEY = process.env.NEXT_PUBLIC_OMDB_KEY || '';
 const TMDB_BASE = 'https://api.themoviedb.org/3';
 
-// Updated comprehensive provider map
+// Clean provider map - ONLY ONE ID per service name
 const PROVIDER_MAP: { [key: number]: string } = {
+  2: 'Apple TV+',
   8: 'Netflix',
   9: 'Amazon Prime',
-  10: 'Amazon Prime',
-  119: 'Amazon Prime',
   15: 'Hulu',
-  16: 'Hulu',
-  531: 'Paramount+',
-  582: 'Paramount+',
-  1770: 'Paramount+',
-  384: 'HBO Max',
-  1899: 'Max',
-  387: 'Max',
-  31: 'HBO Max',
-  118: 'HBO Max',
-  337: 'Disney+',
-  390: 'Disney+',
-  350: 'Apple TV+',
-  2: 'Apple TV+',
-  386: 'Peacock',
-  387: 'Peacock',
-  73: 'Tubi',
-  283: 'Tubi',
-  43: 'Showtime',
+  31: 'Max',
   37: 'Showtime',
-  1853: 'Paramount+ with Showtime',
-  642: 'Showtime',
-  300: 'Pluto TV',
+  73: 'Tubi',
   279: 'Pluto TV',
+  337: 'Disney+',
+  386: 'Peacock',
+  531: 'Paramount+',
 };
 
 async function getOMDbRating(imdbId: string): Promise<string> {
@@ -83,13 +66,10 @@ export async function getTMDBStreaming(mediaType: 'movie' | 'tv'): Promise<Media
           
           if (!usProviders) continue;
           
-          // Check ALL provider types
           const allProviders = [
             ...(usProviders.flatrate || []),
             ...(usProviders.free || []),
-            ...(usProviders.ads || []),
-            ...(usProviders.rent || []),
-            ...(usProviders.buy || [])
+            ...(usProviders.ads || [])
           ];
           
           allProviders.forEach((p: any) => {
@@ -168,7 +148,6 @@ export async function getTMDBUpcoming(mediaType: 'movie' | 'tv'): Promise<MediaI
     
     console.log('📡 Fetching upcoming streaming releases...');
     
-    // Get content from the last 3 months and next 6 months
     const today = new Date();
     const threeMonthsAgo = new Date(today.getTime() - 90 * 24 * 60 * 60 * 1000);
     const sixMonthsFromNow = new Date(today.getTime() + 180 * 24 * 60 * 60 * 1000);
@@ -176,7 +155,6 @@ export async function getTMDBUpcoming(mediaType: 'movie' | 'tv'): Promise<MediaI
     const startDate = threeMonthsAgo.toISOString().split('T')[0];
     const endDate = sixMonthsFromNow.toISOString().split('T')[0];
     
-    // Use discover to find content with streaming providers
     for (let page = 1; page <= 10; page++) {
       const endpoint = mediaType === 'movie' ? 'discover/movie' : 'discover/tv';
       const dateParam = mediaType === 'movie' ? 'primary_release_date' : 'first_air_date';
@@ -197,7 +175,6 @@ export async function getTMDBUpcoming(mediaType: 'movie' | 'tv'): Promise<MediaI
       
       for (const item of results) {
         try {
-          // Get provider info
           const providerUrl = `${TMDB_BASE}/${mediaType}/${item.id}/watch/providers?api_key=${TMDB_KEY}`;
           const providerRes = await fetch(providerUrl, { cache: 'no-store' });
           
@@ -226,21 +203,18 @@ export async function getTMDBUpcoming(mediaType: 'movie' | 'tv'): Promise<MediaI
             }
           }
           
-          // Get the release date
           const releaseDate = item.release_date || item.first_air_date;
           if (!releaseDate) continue;
           
           const relDate = new Date(releaseDate);
           const isUpcoming = relDate > today;
           
-          // Format date
           const formattedDate = relDate.toLocaleDateString('en-US', { 
             month: 'short', 
             day: 'numeric',
             year: 'numeric' 
           });
           
-          // Get IMDb info
           const detailUrl = `${TMDB_BASE}/${mediaType}/${item.id}/external_ids?api_key=${TMDB_KEY}`;
           const detailRes = await fetch(detailUrl, { cache: 'no-store' });
           let imdbId = '';
@@ -258,7 +232,6 @@ export async function getTMDBUpcoming(mediaType: 'movie' | 'tv'): Promise<MediaI
             ? item.genre_ids.map((id: number) => id.toString()) 
             : [];
           
-          // Only add if it has a service or is truly upcoming
           if (serviceName !== 'Coming Soon' || isUpcoming) {
             allItems.push({
               id: `tmdb-${item.id}`,
@@ -285,13 +258,12 @@ export async function getTMDBUpcoming(mediaType: 'movie' | 'tv'): Promise<MediaI
       }
     }
     
-    // Remove duplicates and sort by date
     const uniqueItems = Array.from(
       new Map(allItems.map(item => [item.id, item])).values()
     ).sort((a, b) => {
       const dateA = new Date(a.release_date).getTime();
       const dateB = new Date(b.release_date).getTime();
-      return dateB - dateA; // Newest first
+      return dateB - dateA;
     });
     
     console.log(`🎬 Total upcoming items: ${uniqueItems.length}`);
