@@ -1,5 +1,4 @@
 import { MediaItem, STREAMING_SERVICES } from './types';
-import { getWatchmodeUpcoming, searchWatchmode } from './watchmode';
 
 const RAPIDAPI_KEY = process.env.NEXT_PUBLIC_RAPIDAPI_KEY || '';
 const OMDB_KEY = process.env.NEXT_PUBLIC_OMDB_KEY || '';
@@ -42,11 +41,14 @@ async function getShowDetails(showId: string): Promise<any> {
   }
 }
 
-async function getStreamingAvailabilityContent(mediaType: 'movie' | 'tv'): Promise<MediaItem[]> {
+export async function getUpcomingContent(mediaType: 'movie' | 'tv'): Promise<MediaItem[]> {
   try {
     const showType = mediaType === 'movie' ? 'movie' : 'series';
-    const services = ['netflix', 'prime', 'hulu', 'disney', 'hbo', 'apple', 'paramount'];
+    // More services including Tubi and others
+    const services = ['netflix', 'prime', 'hulu', 'disney', 'hbo', 'apple', 'paramount', 'peacock', 'showtime', 'starz'];
     const allContent: MediaItem[] = [];
+    
+    console.log('Fetching from Streaming Availability API...');
     
     for (const service of services) {
       try {
@@ -60,13 +62,21 @@ async function getStreamingAvailabilityContent(mediaType: 'movie' | 'tv'): Promi
           cache: 'no-store'
         });
         
-        if (!response.ok) continue;
+        if (!response.ok) {
+          console.log(`${service}: No data (${response.status})`);
+          continue;
+        }
         
         const data = await response.json();
         
-        if (!data.changes || data.changes.length === 0) continue;
+        if (!data.changes || data.changes.length === 0) {
+          console.log(`${service}: No changes`);
+          continue;
+        }
         
-        for (const change of data.changes.slice(0, 3)) {
+        console.log(`${service}: ${data.changes.length} changes found`);
+        
+        for (const change of data.changes.slice(0, 4)) {
           try {
             const showDetails = await getShowDetails(change.showId);
             
@@ -82,8 +92,8 @@ async function getStreamingAvailabilityContent(mediaType: 'movie' | 'tv'): Promi
                 vote_average: showDetails.rating || 0,
                 genre_ids: showDetails.genres?.map((g: any) => g.id) || [],
                 media_type: mediaType,
-                providers: [STREAMING_SERVICES[service as keyof typeof STREAMING_SERVICES]],
-                service: STREAMING_SERVICES[service as keyof typeof STREAMING_SERVICES],
+                providers: [STREAMING_SERVICES[service as keyof typeof STREAMING_SERVICES] || service],
+                service: STREAMING_SERVICES[service as keyof typeof STREAMING_SERVICES] || service.toUpperCase(),
                 availableDate: change.timestamp ? 'Added ' + new Date(change.timestamp * 1000).toLocaleDateString('en-US', { 
                   month: 'short', 
                   day: 'numeric'
@@ -102,34 +112,11 @@ async function getStreamingAvailabilityContent(mediaType: 'movie' | 'tv'): Promi
       }
     }
     
-    return allContent;
-  } catch (error) {
-    console.error('Error in getStreamingAvailabilityContent:', error);
-    return [];
-  }
-}
-
-export async function getUpcomingContent(mediaType: 'movie' | 'tv'): Promise<MediaItem[]> {
-  try {
-    console.log('Fetching content from multiple sources...');
-    
-    // Fetch from both APIs in parallel
-    const [streamingAvail, watchmode] = await Promise.all([
-      getStreamingAvailabilityContent(mediaType),
-      getWatchmodeUpcoming(mediaType)
-    ]);
-    
-    console.log(`Streaming Availability: ${streamingAvail.length} items`);
-    console.log(`Watchmode: ${watchmode.length} items`);
-    
-    // Combine and remove duplicates based on title
-    const allContent = [...streamingAvail, ...watchmode];
+    console.log(`Total content fetched: ${allContent.length}`);
     
     const uniqueContent = Array.from(
       new Map(allContent.map(item => [item.title.toLowerCase(), item])).values()
     );
-    
-    console.log(`Total unique items: ${uniqueContent.length}`);
     
     return uniqueContent.sort((a, b) => 
       new Date(a.release_date).getTime() - new Date(b.release_date).getTime()
@@ -143,28 +130,6 @@ export async function getUpcomingContent(mediaType: 'movie' | 'tv'): Promise<Med
 export async function searchContent(query: string, mediaType: 'movie' | 'tv'): Promise<MediaItem[]> {
   if (!query.trim()) return [];
   
-  try {
-    // Search both APIs
-    const [streamingResults, watchmodeResults] = await Promise.all([
-      searchStreamingAvailability(query, mediaType),
-      searchWatchmode(query, mediaType)
-    ]);
-    
-    const allResults = [...streamingResults, ...watchmodeResults];
-    
-    // Remove duplicates
-    const uniqueResults = Array.from(
-      new Map(allResults.map(item => [item.title.toLowerCase(), item])).values()
-    );
-    
-    return uniqueResults;
-  } catch (error) {
-    console.error('Error searching:', error);
-    return [];
-  }
-}
-
-async function searchStreamingAvailability(query: string, mediaType: 'movie' | 'tv'): Promise<MediaItem[]> {
   try {
     const showType = mediaType === 'movie' ? 'movie' : 'series';
     const url = `https://${API_HOST}/shows/search/title?title=${encodeURIComponent(query)}&country=us&show_type=${showType}&output_language=en`;
@@ -181,7 +146,7 @@ async function searchStreamingAvailability(query: string, mediaType: 'movie' | '
     
     const shows = await response.json();
     
-    return shows.slice(0, 10).map((show: any) => {
+    return shows.slice(0, 20).map((show: any) => {
       const usStreaming = show.streamingInfo?.us || {};
       const services = Object.keys(usStreaming)
         .filter(s => STREAMING_SERVICES[s as keyof typeof STREAMING_SERVICES])
@@ -204,6 +169,7 @@ async function searchStreamingAvailability(query: string, mediaType: 'movie' | '
       };
     });
   } catch (error) {
+    console.error('Error searching:', error);
     return [];
   }
 }

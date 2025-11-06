@@ -1,32 +1,3 @@
-export interface StreamingShow {
-  id: string;
-  title: string;
-  overview: string;
-  imageSet?: {
-    verticalPoster?: {
-      w240?: string;
-      w360?: string;
-      w480?: string;
-      w600?: string;
-      w720?: string;
-    };
-  };
-  releaseYear?: number;
-  genres?: Array<{ id: string; name: string }>;
-  rating?: number;
-  streamingInfo?: {
-    [country: string]: {
-      [service: string]: Array<{
-        type: string;
-        streamingType: string;
-        availableSince?: number;
-      }>;
-    };
-  };
-  showType: 'movie' | 'series';
-  imdbId?: string;
-}
-
 export interface MediaItem {
   id: string;
   title: string;
@@ -52,6 +23,14 @@ export const STREAMING_SERVICES = {
   'hbo': 'HBO Max',
   'disney': 'Disney+',
   'apple': 'Apple TV+',
+  'peacock': 'Peacock',
+  'showtime': 'Showtime',
+  'starz': 'Starz',
+  'tubi': 'Tubi',
+  'pluto': 'Pluto TV',
+  'crackle': 'Crackle',
+  'vudu': 'Vudu',
+  'max': 'Max',
 } as const;
 
 export const GENRES = {
