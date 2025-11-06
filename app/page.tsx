@@ -21,17 +21,45 @@ export default function Home() {
   const [selectedGenre, setSelectedGenre] = useState('all');
   const [dateFilter, setDateFilter] = useState('all');
   const [selectedService, setSelectedService] = useState('all');
+  
+  // Cache for loaded content to avoid re-fetching
+  const [contentCache, setContentCache] = useState<{
+    streamingMovies?: MediaItem[];
+    streamingTv?: MediaItem[];
+    upcomingMovies?: MediaItem[];
+    upcomingTv?: MediaItem[];
+  }>({});
 
   useEffect(() => {
     const fetchContent = async () => {
       setLoading(true);
       setSearchQuery('');
+      
+      // Build cache key
+      const cacheKey = `${contentType}${mediaType.charAt(0).toUpperCase()}${mediaType.slice(1)}` as 
+        'streamingMovies' | 'streamingTv' | 'upcomingMovies' | 'upcomingTv';
+      
+      // Check if we have cached data
+      if (contentCache[cacheKey]) {
+        console.log('✅ Using cached data for', cacheKey);
+        setContent(contentCache[cacheKey]!);
+        setLoading(false);
+        return;
+      }
+      
+      // Fetch new data if not cached
+      console.log('🔄 Fetching new data for', cacheKey);
       const data = contentType === 'streaming' 
         ? await getStreamingContent(mediaType)
         : await getUpcomingContent(mediaType);
+      
       setContent(data);
+      
+      // Save to cache
+      setContentCache(prev => ({ ...prev, [cacheKey]: data }));
       setLoading(false);
     };
+    
     fetchContent();
   }, [mediaType, contentType]);
 
@@ -174,7 +202,7 @@ export default function Home() {
         )}
 
         <footer className="mt-16 text-center text-sm text-gray-500 dark:text-gray-400 border-t border-gray-200 dark:border-gray-700 pt-8">
-          <p>Data from Watchmode API & OMDb</p>
+          <p>Data from Watchmode API, Streaming Availability API & OMDb</p>
           <p className="mt-1">AI recommendations powered by OpenAI</p>
         </footer>
       </div>
