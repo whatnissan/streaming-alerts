@@ -29,19 +29,79 @@ async function getOMDbRating(imdbId: string): Promise<string> {
 export async function getStreamingContent(mediaType: 'movie' | 'tv'): Promise<MediaItem[]> {
   try {
     const type = mediaType === 'movie' ? 'movie' : 'tv_series';
-    const currentYear = new Date().getFullYear();
-    const url = `https://api.watchmode.com/v1/list-titles/?apiKey=${WATCHMODE_KEY}&types=${type}&release_date_start=20200101&release_date_end=${currentYear}1231&sort_by=popularity_desc&limit=100`;
     
-    console.log('Fetching currently streaming content...');
-    const response = await fetch(url, { cache: 'no-store' });
+    // Get content by SOURCE (Netflix, Hulu, etc) to ensure they're currently available
+    const services = [203, 26, 157, 444, 387, 372, 371]; // Netflix, Prime, Hulu, etc
+    const allItems: MediaItem[] = [];
     
-    if (!response.ok) return [];
+    for (const sourceId of services) {
+      try {
+        const url = `https://api.watchmode.com/v1/list-titles/?apiKey=${WATCHMODE_KEY}&types=${type}&source_ids=${sourceId}&sort_by=popularity_desc&limit=20`;
+        
+        console.log(`Fetching from ${SERVICE_MAP[sourceId]}...`);
+        const response = await fetch(url, { cache: 'no-store' });
+        
+        if (!response.ok) continue;
+        
+        const data = await response.json();
+        const titles = data.titles || [];
+        console.log(`${SERVICE_MAP[sourceId]}: ${titles.length} titles`);
+        
+        // Get details for first 5 from each service
+        for (let i = 0; i < Math.min(5, titles.length); i++) {
+          const title = titles[i];
+          try {
+            const detailRes = await fetch(`https://api.watchmode.com/v1/title/${title.id}/details/?apiKey=${WATCHMODE_KEY}`, { cache: 'no-store' });
+            
+            if (!detailRes.ok) continue;
+            
+            const details = await detailRes.json();
+            
+            const serviceNames: string[] = details.sources
+              ?.filter((s: any) => SERVICE_MAP[s.source_id])
+              .map((s: any) => SERVICE_MAP[s.source_id]) || [];
+            
+            const uniqueServices: string[] = Array.from(new Set(serviceNames));
+            
+            if (uniqueServices.length > 0) {
+              const imdbRating = details.imdb_id ? await getOMDbRating(details.imdb_id) : '';
+              const genreNames: string[] = Array.isArray(details.genre_names) ? details.genre_names : [];
+              
+              allItems.push({
+                id: details.id.toString(),
+                title: details.title,
+                overview: details.plot_overview || 'No description available',
+                poster_path: details.poster || null,
+                release_date: details.year ? `${details.year}-01-01` : '',
+                vote_average: details.user_rating || 0,
+                genre_ids: genreNames,
+                media_type: mediaType,
+                providers: uniqueServices,
+                service: uniqueServices[0],
+                availableDate: 'Streaming Now',
+                imdbRating,
+                imdbId: details.imdb_id,
+                year: details.year?.toString()
+              });
+              
+              console.log(`✓ ${details.title} on ${uniqueServices.join(', ')}`);
+            }
+          } catch (err) {
+            console.error('Error processing title:', err);
+          }
+        }
+      } catch (err) {
+        console.error(`Error fetching ${SERVICE_MAP[sourceId]}:`, err);
+      }
+    }
     
-    const data = await response.json();
-    const titles = data.titles || [];
-    console.log(`Got ${titles.length} streaming titles`);
+    // Remove duplicates
+    const uniqueItems = Array.from(
+      new Map(allItems.map(item => [item.id, item])).values()
+    );
     
-    return await processWatchmodeTitles(titles, mediaType, 30, 'Streaming Now');
+    console.log(`Total streaming items: ${uniqueItems.length}`);
+    return uniqueItems;
   } catch (error) {
     console.error('Error:', error);
     return [];
@@ -97,7 +157,6 @@ async function processWatchmodeTitles(
         uniqueServices = Array.from(new Set(serviceNames));
       }
       
-      // For streaming: require services. For upcoming: allow without services
       if (!allowNoSources && uniqueServices.length === 0) {
         continue;
       }
@@ -122,7 +181,7 @@ async function processWatchmodeTitles(
         year: details.year?.toString()
       });
       
-      console.log(`✓ ${details.title} - ${items[items.length - 1].availableDate}`);
+      console.log(`✓ ${details.title}`);
     } catch (err) {
       console.error(`Error:`, err);
     }
