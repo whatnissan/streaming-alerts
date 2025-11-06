@@ -83,14 +83,12 @@ export default function Home() {
             🎬 Streaming Alerts
           </h1>
           <p className="text-gray-600 dark:text-gray-400 text-lg">
-            New & upcoming on Netflix, Prime, Disney+, HBO Max, Hulu, Paramount+ & Apple TV+
+            Popular content on Netflix, Prime, Disney+, HBO Max, Hulu, Paramount+, Apple TV+, Peacock & more
           </p>
         </header>
 
-        {/* Data Source Stats */}
-        {!loading && <DataSourceStats content={content} />}
+        {!loading && content.length > 0 && <DataSourceStats content={content} />}
 
-        {/* AI Recommendations Section */}
         <AIRecommendations likedItems={likedItems} allContent={content} />
 
         <SearchBar onSearch={handleSearch} />
@@ -153,7 +151,7 @@ export default function Home() {
         )}
 
         <footer className="mt-16 text-center text-sm text-gray-500 dark:text-gray-400 border-t border-gray-200 dark:border-gray-700 pt-8">
-          <p>Data from Streaming Availability API, Watchmode API & OMDb</p>
+          <p>Data from Watchmode API & OMDb</p>
           <p className="mt-1">AI recommendations powered by OpenAI</p>
         </footer>
       </div>

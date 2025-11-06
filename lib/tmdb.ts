@@ -16,24 +16,14 @@ const SERVICE_MAP: { [key: number]: string } = {
   201: 'Tubi',
 };
 
-async function getOMDbRating(imdbId: string): Promise<string> {
-  if (!imdbId || !OMDB_KEY) return '';
-  try {
-    const response = await fetch(`https://www.omdbapi.com/?i=${imdbId}&apikey=${OMDB_KEY}`, { cache: 'force-cache' });
-    if (!response.ok) return '';
-    const data = await response.json();
-    return data.imdbRating && data.imdbRating !== 'N/A' ? data.imdbRating : '';
-  } catch { return ''; }
-}
-
 export async function getUpcomingContent(mediaType: 'movie' | 'tv'): Promise<MediaItem[]> {
   try {
     const type = mediaType === 'movie' ? 'movie' : 'tv_series';
-    const sources = '203,26,157,444,387,372,371'; // Major services
     
-    const url = `https://api.watchmode.com/v1/list-titles/?apiKey=${WATCHMODE_KEY}&types=${type}&source_ids=${sources}&limit=50`;
+    // Get POPULAR content that's currently available (not upcoming)
+    const url = `https://api.watchmode.com/v1/list-titles/?apiKey=${WATCHMODE_KEY}&types=${type}&limit=100&sort_by=popularity_desc`;
     
-    console.log('Fetching from Watchmode...');
+    console.log('Fetching popular titles from Watchmode...');
     const response = await fetch(url, { cache: 'no-store' });
     
     if (!response.ok) {
@@ -43,62 +33,60 @@ export async function getUpcomingContent(mediaType: 'movie' | 'tv'): Promise<Med
     
     const data = await response.json();
     const titles = data.titles || [];
-    console.log(`Got ${titles.length} titles from list`);
+    console.log(`Got ${titles.length} titles`);
     
-    // Get details for first 20 only
-    const detailedItems: MediaItem[] = [];
+    const items: MediaItem[] = [];
     
-    for (let i = 0; i < Math.min(20, titles.length); i++) {
+    // Process each title and check if it's on streaming
+    for (let i = 0; i < titles.length && items.length < 30; i++) {
       const title = titles[i];
       try {
-        console.log(`Fetching details for: ${title.title}`);
         const detailRes = await fetch(`https://api.watchmode.com/v1/title/${title.id}/details/?apiKey=${WATCHMODE_KEY}`, { cache: 'no-store' });
         
-        if (!detailRes.ok) {
-          console.error(`Failed to get details for ${title.title}`);
-          continue;
-        }
+        if (!detailRes.ok) continue;
         
         const details = await detailRes.json();
-        const sources = details.sources || [];
-        const services = sources
+        
+        // Check if it has US sources
+        const usSources = details.sources?.filter((s: any) => s.region === 'US') || details.sources || [];
+        
+        // Map to our services
+        const services = usSources
           .filter((s: any) => SERVICE_MAP[s.source_id])
           .map((s: any) => SERVICE_MAP[s.source_id]);
         
-        if (services.length === 0) {
-          console.log(`No streaming services for ${title.title}`);
-          continue;
+        // Get unique services
+        const uniqueServices = [...new Set(services)];
+        
+        if (uniqueServices.length > 0) {
+          items.push({
+            id: details.id.toString(),
+            title: details.title,
+            overview: details.plot_overview || 'No description available',
+            poster_path: details.poster || null,
+            release_date: details.year ? `${details.year}-01-01` : '',
+            vote_average: details.user_rating || 0,
+            genre_ids: details.genre_names || [],
+            media_type: mediaType,
+            providers: uniqueServices,
+            service: uniqueServices[0],
+            availableDate: 'Streaming Now',
+            imdbRating: details.imdb_rating?.toString() || '',
+            imdbId: details.imdb_id,
+            year: details.year?.toString()
+          });
+          
+          console.log(`✓ ${details.title} on ${uniqueServices.join(', ')}`);
         }
-        
-        const imdbRating = details.imdb_id ? await getOMDbRating(details.imdb_id) : '';
-        
-        detailedItems.push({
-          id: details.id.toString(),
-          title: details.title,
-          overview: details.plot_overview || 'No description available',
-          poster_path: details.poster || null,
-          release_date: details.release_date || (details.year ? `${details.year}-01-01` : ''),
-          vote_average: details.user_rating || 0,
-          genre_ids: details.genre_names || [],
-          media_type: mediaType,
-          providers: services,
-          service: services[0],
-          availableDate: 'Available Now',
-          imdbRating,
-          imdbId: details.imdb_id,
-          year: details.year?.toString()
-        });
-        
-        console.log(`Added: ${details.title} on ${services[0]}`);
       } catch (err) {
-        console.error(`Error processing ${title.title}:`, err);
+        console.error(`Error processing title ${i}:`, err);
       }
     }
     
-    console.log(`Total items with details: ${detailedItems.length}`);
-    return detailedItems;
+    console.log(`Found ${items.length} items with streaming info`);
+    return items;
   } catch (error) {
-    console.error('Error in getUpcomingContent:', error);
+    console.error('Error:', error);
     return [];
   }
 }
