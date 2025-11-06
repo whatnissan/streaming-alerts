@@ -7,10 +7,11 @@ import SearchBar from '@/components/SearchBar';
 import AIRecommendations from '@/components/AIRecommendations';
 import DataSourceStats from '@/components/DataSourceStats';
 import { MediaItem } from '@/lib/types';
-import { getUpcomingContent, searchContent, filterByDate, getReleaseDate } from '@/lib/tmdb';
+import { getStreamingContent, getUpcomingContent, searchContent, filterByDate, getReleaseDate } from '@/lib/tmdb';
 
 export default function Home() {
   const [mediaType, setMediaType] = useState<'movie' | 'tv'>('movie');
+  const [contentType, setContentType] = useState<'streaming' | 'upcoming'>('streaming');
   const [content, setContent] = useState<MediaItem[]>([]);
   const [filteredContent, setFilteredContent] = useState<MediaItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -24,12 +25,14 @@ export default function Home() {
     const fetchContent = async () => {
       setLoading(true);
       setSearchQuery('');
-      const data = await getUpcomingContent(mediaType);
+      const data = contentType === 'streaming' 
+        ? await getStreamingContent(mediaType)
+        : await getUpcomingContent(mediaType);
       setContent(data);
       setLoading(false);
     };
     fetchContent();
-  }, [mediaType]);
+  }, [mediaType, contentType]);
 
   useEffect(() => {
     let filtered = [...content];
@@ -83,7 +86,9 @@ export default function Home() {
             🎬 Streaming Alerts
           </h1>
           <p className="text-gray-600 dark:text-gray-400 text-lg">
-            Popular content on Netflix, Prime, Disney+, HBO Max, Hulu, Paramount+, Apple TV+, Peacock & more
+            {contentType === 'streaming' 
+              ? 'Currently streaming on Netflix, Prime, Disney+, HBO Max, Hulu & more'
+              : 'Coming soon to streaming services'}
           </p>
         </header>
 
@@ -100,6 +105,8 @@ export default function Home() {
           setDateFilter={setDateFilter}
           mediaType={mediaType}
           setMediaType={setMediaType}
+          contentType={contentType}
+          setContentType={setContentType}
         />
 
         {!loading && (
@@ -108,7 +115,7 @@ export default function Home() {
               <p>Found {filteredContent.length} results for "{searchQuery}"</p>
             ) : (
               <>
-                <p>Showing {filteredContent.length} {mediaType === 'movie' ? 'movies' : 'TV shows'}</p>
+                <p>Showing {filteredContent.length} {contentType === 'streaming' ? 'streaming' : 'upcoming'} {mediaType === 'movie' ? 'movies' : 'TV shows'}</p>
                 <p className="text-sm mt-1">💡 Click on shows you like to get AI recommendations!</p>
               </>
             )}

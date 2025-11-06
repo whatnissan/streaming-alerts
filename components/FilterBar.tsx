@@ -9,62 +9,89 @@ interface FilterBarProps {
   setDateFilter: (filter: string) => void;
   mediaType: 'movie' | 'tv';
   setMediaType: (type: 'movie' | 'tv') => void;
+  contentType: 'streaming' | 'upcoming';
+  setContentType: (type: 'streaming' | 'upcoming') => void;
 }
 
 export default function FilterBar({
-  selectedGenre, setSelectedGenre, dateFilter, setDateFilter, mediaType, setMediaType,
+  selectedGenre,
+  setSelectedGenre,
+  dateFilter,
+  setDateFilter,
+  mediaType,
+  setMediaType,
+  contentType,
+  setContentType,
 }: FilterBarProps) {
-  const genres = Object.entries(GENRES);
-
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 mb-6 space-y-4">
-      <div className="flex gap-2">
-        <button
-          onClick={() => setMediaType('movie')}
-          className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors ${
-            mediaType === 'movie' ? 'bg-blue-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-          }`}
-        >
-          Movies
-        </button>
-        <button
-          onClick={() => setMediaType('tv')}
-          className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors ${
-            mediaType === 'tv' ? 'bg-blue-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-          }`}
-        >
-          TV Shows
-        </button>
-      </div>
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        {/* Content Type Filter */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Content Type
+          </label>
+          <select
+            value={contentType}
+            onChange={(e) => setContentType(e.target.value as 'streaming' | 'upcoming')}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+          >
+            <option value="streaming">🎬 Streaming Now</option>
+            <option value="upcoming">📅 Coming Soon</option>
+          </select>
+        </div>
 
-      <div>
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Release Time</label>
-        <select value={dateFilter} onChange={(e) => setDateFilter(e.target.value)} className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-          <option value="all">All Upcoming</option>
-          <option value="this-week">This Week</option>
-          <option value="this-month">This Month</option>
-          <option value="coming-soon">Later</option>
-        </select>
-      </div>
+        {/* Media Type */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Type
+          </label>
+          <select
+            value={mediaType}
+            onChange={(e) => setMediaType(e.target.value as 'movie' | 'tv')}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+          >
+            <option value="movie">Movies</option>
+            <option value="tv">TV Shows</option>
+          </select>
+        </div>
 
-      <div>
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Genre</label>
-        <select value={selectedGenre} onChange={(e) => setSelectedGenre(e.target.value)} className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-          <option value="all">All Genres</option>
-          {genres.map(([id, name]) => (
-            <option key={id} value={id}>{name}</option>
-          ))}
-        </select>
-      </div>
+        {/* Genre Filter */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Genre
+          </label>
+          <select
+            value={selectedGenre}
+            onChange={(e) => setSelectedGenre(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+          >
+            <option value="all">All Genres</option>
+            {Object.entries(GENRES).map(([key, value]) => (
+              <option key={key} value={key}>
+                {value}
+              </option>
+            ))}
+          </select>
+        </div>
 
-      {(selectedGenre !== 'all' || dateFilter !== 'all') && (
-        <button
-          onClick={() => { setSelectedGenre('all'); setDateFilter('all'); }}
-          className="w-full px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
-        >
-          Reset Filters
-        </button>
-      )}
+        {/* Date Filter */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Release Date
+          </label>
+          <select
+            value={dateFilter}
+            onChange={(e) => setDateFilter(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+          >
+            <option value="all">All Dates</option>
+            <option value="this-week">This Week</option>
+            <option value="this-month">This Month</option>
+            <option value="coming-soon">Later</option>
+          </select>
+        </div>
+      </div>
     </div>
   );
 }
