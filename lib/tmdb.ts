@@ -1,128 +1,90 @@
-import { MediaItem, STREAMING_SERVICES } from './types';
+import { MediaItem } from './types';
 
-const RAPIDAPI_KEY = process.env.NEXT_PUBLIC_RAPIDAPI_KEY || '';
+const WATCHMODE_KEY = process.env.NEXT_PUBLIC_WATCHMODE_KEY || '';
 const OMDB_KEY = process.env.NEXT_PUBLIC_OMDB_KEY || '';
-const API_HOST = 'streaming-availability.p.rapidapi.com';
 
-async function getIMDbRating(imdbId: string): Promise<string> {
+const SERVICE_MAP: { [key: number]: string } = {
+  203: 'Netflix',
+  26: 'Amazon Prime',
+  157: 'Hulu',
+  444: 'Paramount+',
+  387: 'HBO Max',
+  372: 'Disney+',
+  371: 'Apple TV+',
+  389: 'Peacock',
+  43: 'Showtime',
+  201: 'Tubi',
+};
+
+async function getOMDbRating(imdbId: string): Promise<string> {
   if (!imdbId || !OMDB_KEY) return '';
-  
   try {
-    const response = await fetch(
-      `https://www.omdbapi.com/?i=${imdbId}&apikey=${OMDB_KEY}`,
-      { cache: 'force-cache' }
-    );
-    
+    const response = await fetch(`https://www.omdbapi.com/?i=${imdbId}&apikey=${OMDB_KEY}`, { cache: 'force-cache' });
     if (!response.ok) return '';
     const data = await response.json();
     return data.imdbRating && data.imdbRating !== 'N/A' ? data.imdbRating : '';
-  } catch (error) {
-    return '';
-  }
-}
-
-async function getShowDetails(showId: string): Promise<any> {
-  try {
-    const response = await fetch(
-      `https://${API_HOST}/shows/${showId}?output_language=en`,
-      {
-        headers: {
-          'X-RapidAPI-Key': RAPIDAPI_KEY,
-          'X-RapidAPI-Host': API_HOST,
-        },
-        cache: 'no-store'
-      }
-    );
-    
-    if (!response.ok) return null;
-    return await response.json();
-  } catch (error) {
-    return null;
-  }
+  } catch { return ''; }
 }
 
 export async function getUpcomingContent(mediaType: 'movie' | 'tv'): Promise<MediaItem[]> {
   try {
-    const showType = mediaType === 'movie' ? 'movie' : 'series';
-    // More services including Tubi and others
-    const services = ['netflix', 'prime', 'hulu', 'disney', 'hbo', 'apple', 'paramount', 'peacock', 'showtime', 'starz'];
-    const allContent: MediaItem[] = [];
+    const type = mediaType === 'movie' ? 'movie' : 'tv_series';
+    const sources = '203,26,157,444,387,372,371,389,43,201'; // All major services
     
-    console.log('Fetching from Streaming Availability API...');
+    const url = `https://api.watchmode.com/v1/list-titles/?apiKey=${WATCHMODE_KEY}&types=${type}&source_ids=${sources}&limit=100&sort_by=popularity_desc`;
     
-    for (const service of services) {
-      try {
-        const url = `https://${API_HOST}/changes?change_type=new&item_type=show&catalogs=${service}&show_type=${showType}&country=us&output_language=en`;
-        
-        const response = await fetch(url, {
-          headers: {
-            'X-RapidAPI-Key': RAPIDAPI_KEY,
-            'X-RapidAPI-Host': API_HOST,
-          },
-          cache: 'no-store'
-        });
-        
-        if (!response.ok) {
-          console.log(`${service}: No data (${response.status})`);
-          continue;
-        }
-        
-        const data = await response.json();
-        
-        if (!data.changes || data.changes.length === 0) {
-          console.log(`${service}: No changes`);
-          continue;
-        }
-        
-        console.log(`${service}: ${data.changes.length} changes found`);
-        
-        for (const change of data.changes.slice(0, 4)) {
-          try {
-            const showDetails = await getShowDetails(change.showId);
-            
-            if (showDetails) {
-              const imdbRating = showDetails.imdbId ? await getIMDbRating(showDetails.imdbId) : '';
-              
-              allContent.push({
-                id: `sa-${showDetails.id}`,
-                title: showDetails.title,
-                overview: showDetails.overview || 'No description available',
-                poster_path: showDetails.imageSet?.verticalPoster?.w240 || showDetails.imageSet?.verticalPoster?.w360 || null,
-                release_date: change.timestamp ? new Date(change.timestamp * 1000).toISOString().split('T')[0] : '',
-                vote_average: showDetails.rating || 0,
-                genre_ids: showDetails.genres?.map((g: any) => g.id) || [],
-                media_type: mediaType,
-                providers: [STREAMING_SERVICES[service as keyof typeof STREAMING_SERVICES] || service],
-                service: STREAMING_SERVICES[service as keyof typeof STREAMING_SERVICES] || service.toUpperCase(),
-                availableDate: change.timestamp ? 'Added ' + new Date(change.timestamp * 1000).toLocaleDateString('en-US', { 
-                  month: 'short', 
-                  day: 'numeric'
-                }) : 'Recently Added',
-                imdbRating,
-                imdbId: showDetails.imdbId,
-                year: showDetails.releaseYear?.toString() || showDetails.firstAirYear?.toString()
-              });
-            }
-          } catch (err) {
-            console.error('Error processing show:', err);
-          }
-        }
-      } catch (err) {
-        console.error(`Error fetching ${service}:`, err);
-      }
+    console.log('Fetching from Watchmode...');
+    const response = await fetch(url, { cache: 'no-store' });
+    
+    if (!response.ok) {
+      console.error('Watchmode error:', response.status);
+      return [];
     }
     
-    console.log(`Total content fetched: ${allContent.length}`);
+    const data = await response.json();
+    const titles = data.titles || [];
+    console.log(`Got ${titles.length} titles`);
     
-    const uniqueContent = Array.from(
-      new Map(allContent.map(item => [item.title.toLowerCase(), item])).values()
+    // Get details for first 30 (to save API calls)
+    const items = await Promise.all(
+      titles.slice(0, 30).map(async (title: any) => {
+        try {
+          const detailRes = await fetch(`https://api.watchmode.com/v1/title/${title.id}/details/?apiKey=${WATCHMODE_KEY}`);
+          if (!detailRes.ok) return null;
+          
+          const details = await detailRes.json();
+          const sources = details.sources || [];
+          const services = sources
+            .filter((s: any) => SERVICE_MAP[s.source_id])
+            .map((s: any) => SERVICE_MAP[s.source_id]);
+          
+          if (services.length === 0) return null;
+          
+          const imdbRating = details.imdb_id ? await getOMDbRating(details.imdb_id) : '';
+          
+          return {
+            id: details.id.toString(),
+            title: details.title,
+            overview: details.plot_overview || 'No description available',
+            poster_path: details.poster || null,
+            release_date: details.release_date || (details.year ? `${details.year}-01-01` : ''),
+            vote_average: details.user_rating || 0,
+            genre_ids: details.genre_names || [],
+            media_type: mediaType,
+            providers: services,
+            service: services[0],
+            availableDate: 'Available Now',
+            imdbRating,
+            imdbId: details.imdb_id,
+            year: details.year?.toString()
+          };
+        } catch { return null; }
+      })
     );
     
-    return uniqueContent.sort((a, b) => 
-      new Date(a.release_date).getTime() - new Date(b.release_date).getTime()
-    );
+    return items.filter((i): i is MediaItem => i !== null);
   } catch (error) {
-    console.error('Error in getUpcomingContent:', error);
+    console.error('Error:', error);
     return [];
   }
 }
@@ -131,47 +93,32 @@ export async function searchContent(query: string, mediaType: 'movie' | 'tv'): P
   if (!query.trim()) return [];
   
   try {
-    const showType = mediaType === 'movie' ? 'movie' : 'series';
-    const url = `https://${API_HOST}/shows/search/title?title=${encodeURIComponent(query)}&country=us&show_type=${showType}&output_language=en`;
+    const response = await fetch(
+      `https://api.watchmode.com/v1/autocomplete-search/?apiKey=${WATCHMODE_KEY}&search_value=${encodeURIComponent(query)}&search_type=2`,
+      { cache: 'no-store' }
+    );
     
-    const response = await fetch(url, {
-      headers: {
-        'X-RapidAPI-Key': RAPIDAPI_KEY,
-        'X-RapidAPI-Host': API_HOST,
-      },
-      cache: 'no-store'
-    });
-
     if (!response.ok) return [];
     
-    const shows = await response.json();
+    const data = await response.json();
+    const results = (data.results || []).filter((r: any) => 
+      (mediaType === 'movie' && r.type === 'movie') || (mediaType === 'tv' && r.type === 'tv_series')
+    );
     
-    return shows.slice(0, 20).map((show: any) => {
-      const usStreaming = show.streamingInfo?.us || {};
-      const services = Object.keys(usStreaming)
-        .filter(s => STREAMING_SERVICES[s as keyof typeof STREAMING_SERVICES])
-        .map(s => STREAMING_SERVICES[s as keyof typeof STREAMING_SERVICES]);
-
-      return {
-        id: `sa-${show.id}`,
-        title: show.title,
-        overview: show.overview || 'No description available',
-        poster_path: show.imageSet?.verticalPoster?.w240 || show.imageSet?.verticalPoster?.w360 || null,
-        release_date: show.releaseYear ? `${show.releaseYear}-01-01` : show.firstAirYear ? `${show.firstAirYear}-01-01` : '',
-        vote_average: show.rating || 0,
-        genre_ids: show.genres?.map((g: any) => g.id) || [],
-        media_type: mediaType,
-        providers: services,
-        service: services.length > 0 ? services.join(', ') : 'Available on streaming',
-        imdbRating: '',
-        imdbId: show.imdbId,
-        year: show.releaseYear?.toString() || show.firstAirYear?.toString()
-      };
-    });
-  } catch (error) {
-    console.error('Error searching:', error);
-    return [];
-  }
+    return results.slice(0, 20).map((r: any) => ({
+      id: r.id.toString(),
+      title: r.name,
+      overview: 'Search result',
+      poster_path: r.image_url || null,
+      release_date: r.year ? `${r.year}-01-01` : '',
+      vote_average: 0,
+      genre_ids: [],
+      media_type: mediaType,
+      providers: ['Streaming'],
+      service: 'Available',
+      year: r.year?.toString()
+    }));
+  } catch { return []; }
 }
 
 export function getImageUrl(path: string | null): string {
@@ -189,11 +136,7 @@ export function getReleaseDate(item: MediaItem): string {
 export function formatDate(dateString: string): string {
   if (!dateString) return 'TBA';
   const date = new Date(dateString);
-  return date.toLocaleDateString('en-US', { 
-    month: 'short', 
-    day: 'numeric', 
-    year: 'numeric' 
-  });
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 export function filterByDate(items: MediaItem[], filter: string): MediaItem[] {
@@ -203,16 +146,11 @@ export function filterByDate(items: MediaItem[], filter: string): MediaItem[] {
   
   return items.filter((item) => {
     const releaseDate = new Date(item.release_date);
-    
     switch (filter) {
-      case 'this-week':
-        return releaseDate >= now && releaseDate <= oneWeek;
-      case 'this-month':
-        return releaseDate >= now && releaseDate <= oneMonth;
-      case 'coming-soon':
-        return releaseDate > oneMonth;
-      default:
-        return true;
+      case 'this-week': return releaseDate >= now && releaseDate <= oneWeek;
+      case 'this-month': return releaseDate >= now && releaseDate <= oneMonth;
+      case 'coming-soon': return releaseDate > oneMonth;
+      default: return true;
     }
   });
 }
