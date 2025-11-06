@@ -1,10 +1,6 @@
 import { MediaItem } from './types';
 import { getTMDBStreaming, getTMDBUpcoming } from './tmdb-api';
 
-const WATCHMODE_KEY = process.env.NEXT_PUBLIC_WATCHMODE_KEY || '';
-const OMDB_KEY = process.env.NEXT_PUBLIC_OMDB_KEY || '';
-const RAPIDAPI_KEY = process.env.NEXT_PUBLIC_RAPIDAPI_KEY || '';
-
 export async function getStreamingContent(mediaType: 'movie' | 'tv'): Promise<MediaItem[]> {
   try {
     console.log('Using TMDB for streaming content...');
@@ -14,8 +10,7 @@ export async function getStreamingContent(mediaType: 'movie' | 'tv'): Promise<Me
       return tmdbContent;
     }
     
-    // Fallback to other sources if needed
-    console.log('TMDB had limited results, not falling back to preserve API limits');
+    console.log('TMDB had limited results');
     return tmdbContent;
   } catch (error) {
     console.error('Error:', error);
@@ -55,19 +50,25 @@ export async function searchContent(query: string, mediaType: 'movie' | 'tv'): P
     const data = await response.json();
     const results = data.results || [];
     
-    return results.slice(0, 20).map((item: any) => ({
-      id: `tmdb-${item.id}`,
-      title: item.title || item.name,
-      overview: item.overview || 'No description available',
-      poster_path: item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : null,
-      release_date: item.release_date || item.first_air_date || '',
-      vote_average: item.vote_average || 0,
-      genre_ids: item.genre_ids?.map((id: number) => id.toString()) || [],
-      media_type: mediaType,
-      providers: ['Available'],
-      service: 'Available',
-      year: (item.release_date || item.first_air_date)?.split('-')[0]
-    }));
+    return results.slice(0, 20).map((item: any) => {
+      const genreIds: string[] = Array.isArray(item.genre_ids) 
+        ? item.genre_ids.map((id: number) => id.toString()) 
+        : [];
+      
+      return {
+        id: `tmdb-${item.id}`,
+        title: item.title || item.name,
+        overview: item.overview || 'No description available',
+        poster_path: item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : null,
+        release_date: item.release_date || item.first_air_date || '',
+        vote_average: item.vote_average || 0,
+        genre_ids: genreIds,
+        media_type: mediaType,
+        providers: ['Available'],
+        service: 'Available',
+        year: (item.release_date || item.first_air_date)?.split('-')[0]
+      };
+    });
   } catch (error) {
     console.error('Search error:', error);
     return [];
