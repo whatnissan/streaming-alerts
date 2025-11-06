@@ -24,6 +24,7 @@ export interface StreamingShow {
     };
   };
   showType: 'movie' | 'series';
+  imdbId?: string;
 }
 
 export interface MediaItem {
@@ -38,6 +39,9 @@ export interface MediaItem {
   providers?: string[];
   service?: string;
   availableDate?: string;
+  imdbRating?: string;
+  imdbId?: string;
+  year?: string;
 }
 
 export const STREAMING_SERVICES = {
@@ -70,3 +74,10 @@ export const GENRES = {
   'war': 'War',
   'western': 'Western',
 } as const;
+
+export interface AIRecommendation {
+  title: string;
+  reason: string;
+  genres: string[];
+  service: string;
+}

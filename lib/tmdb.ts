@@ -1,7 +1,26 @@
 import { MediaItem, STREAMING_SERVICES } from './types';
 
 const RAPIDAPI_KEY = process.env.NEXT_PUBLIC_RAPIDAPI_KEY || '';
+const OMDB_KEY = process.env.NEXT_PUBLIC_OMDB_KEY || '';
 const API_HOST = 'streaming-availability.p.rapidapi.com';
+
+async function getIMDbRating(imdbId: string): Promise<string> {
+  if (!imdbId || !OMDB_KEY) return '';
+  
+  try {
+    const response = await fetch(
+      `https://www.omdbapi.com/?i=${imdbId}&apikey=${OMDB_KEY}`,
+      { cache: 'force-cache' }
+    );
+    
+    if (!response.ok) return '';
+    
+    const data = await response.json();
+    return data.imdbRating && data.imdbRating !== 'N/A' ? data.imdbRating : '';
+  } catch (error) {
+    return '';
+  }
+}
 
 async function getShowDetails(showId: string): Promise<any> {
   try {
@@ -26,10 +45,9 @@ async function getShowDetails(showId: string): Promise<any> {
 export async function getUpcomingContent(mediaType: 'movie' | 'tv'): Promise<MediaItem[]> {
   try {
     const showType = mediaType === 'movie' ? 'movie' : 'series';
-    const services = ['netflix', 'prime', 'disney', 'hbo', 'apple'];
+    const services = ['netflix', 'prime', 'hulu', 'disney', 'hbo', 'apple', 'paramount'];
     const allContent: MediaItem[] = [];
     
-    // Try to get upcoming content first
     for (const service of services) {
       try {
         const url = `https://${API_HOST}/changes?change_type=upcoming&item_type=show&catalogs=${service}&show_type=${showType}&country=us&output_language=en`;
@@ -48,12 +66,13 @@ export async function getUpcomingContent(mediaType: 'movie' | 'tv'): Promise<Med
         
         if (!data.changes || data.changes.length === 0) continue;
         
-        // Fetch details for upcoming shows
         for (const change of data.changes.slice(0, 3)) {
           try {
             const showDetails = await getShowDetails(change.showId);
             
             if (showDetails) {
+              const imdbRating = showDetails.imdbId ? await getIMDbRating(showDetails.imdbId) : '';
+              
               allContent.push({
                 id: showDetails.id,
                 title: showDetails.title,
@@ -69,7 +88,10 @@ export async function getUpcomingContent(mediaType: 'movie' | 'tv'): Promise<Med
                   month: 'short', 
                   day: 'numeric', 
                   year: 'numeric' 
-                }) : 'TBA'
+                }) : 'TBA',
+                imdbRating,
+                imdbId: showDetails.imdbId,
+                year: showDetails.releaseYear?.toString() || showDetails.firstAirYear?.toString()
               });
             }
           } catch (err) {
@@ -81,11 +103,9 @@ export async function getUpcomingContent(mediaType: 'movie' | 'tv'): Promise<Med
       }
     }
     
-    // If we have some upcoming content, also get recent additions
     const recentContent = await getRecentlyAddedContent(mediaType);
     allContent.push(...recentContent);
     
-    // Remove duplicates
     const uniqueContent = Array.from(
       new Map(allContent.map(item => [item.id, item])).values()
     );
@@ -102,7 +122,7 @@ export async function getUpcomingContent(mediaType: 'movie' | 'tv'): Promise<Med
 async function getRecentlyAddedContent(mediaType: 'movie' | 'tv'): Promise<MediaItem[]> {
   try {
     const showType = mediaType === 'movie' ? 'movie' : 'series';
-    const services = ['netflix', 'prime', 'disney', 'hbo', 'apple'];
+    const services = ['netflix', 'prime', 'hulu', 'disney', 'hbo', 'apple', 'paramount'];
     const allContent: MediaItem[] = [];
     
     for (const service of services) {
@@ -123,12 +143,13 @@ async function getRecentlyAddedContent(mediaType: 'movie' | 'tv'): Promise<Media
         
         if (!data.changes || data.changes.length === 0) continue;
         
-        // Get recently added shows (last 5 per service)
-        for (const change of data.changes.slice(0, 5)) {
+        for (const change of data.changes.slice(0, 4)) {
           try {
             const showDetails = await getShowDetails(change.showId);
             
             if (showDetails) {
+              const imdbRating = showDetails.imdbId ? await getIMDbRating(showDetails.imdbId) : '';
+              
               allContent.push({
                 id: showDetails.id,
                 title: showDetails.title,
@@ -143,7 +164,10 @@ async function getRecentlyAddedContent(mediaType: 'movie' | 'tv'): Promise<Media
                 availableDate: change.timestamp ? 'Added ' + new Date(change.timestamp * 1000).toLocaleDateString('en-US', { 
                   month: 'short', 
                   day: 'numeric'
-                }) : 'Recently Added'
+                }) : 'Recently Added',
+                imdbRating,
+                imdbId: showDetails.imdbId,
+                year: showDetails.releaseYear?.toString() || showDetails.firstAirYear?.toString()
               });
             }
           } catch (err) {
@@ -158,56 +182,6 @@ async function getRecentlyAddedContent(mediaType: 'movie' | 'tv'): Promise<Media
     return allContent;
   } catch (error) {
     console.error('Error in getRecentlyAddedContent:', error);
-    return [];
-  }
-}
-
-async function getPopularContent(mediaType: 'movie' | 'tv'): Promise<MediaItem[]> {
-  try {
-    const showType = mediaType === 'movie' ? 'movie' : 'series';
-    const services = ['netflix', 'prime', 'disney', 'hbo', 'apple'];
-    const allContent: MediaItem[] = [];
-    
-    for (const service of services) {
-      try {
-        const url = `https://${API_HOST}/shows/search/filters?country=us&catalogs=${service}&show_type=${showType}&order_by=popularity_1year&output_language=en`;
-        
-        const response = await fetch(url, {
-          headers: {
-            'X-RapidAPI-Key': RAPIDAPI_KEY,
-            'X-RapidAPI-Host': API_HOST,
-          },
-          cache: 'no-store'
-        });
-
-        if (!response.ok) continue;
-        
-        const data = await response.json();
-        const shows = data.shows || [];
-        
-        const items = shows.slice(0, 10).map((show: any) => ({
-          id: show.id,
-          title: show.title,
-          overview: show.overview || 'No description available',
-          poster_path: show.imageSet?.verticalPoster?.w240 || show.imageSet?.verticalPoster?.w360 || null,
-          release_date: show.releaseYear ? `${show.releaseYear}-01-01` : show.firstAirYear ? `${show.firstAirYear}-01-01` : '',
-          vote_average: show.rating || 0,
-          genre_ids: show.genres?.map((g: any) => g.id) || [],
-          media_type: mediaType,
-          providers: [STREAMING_SERVICES[service as keyof typeof STREAMING_SERVICES]],
-          service: STREAMING_SERVICES[service as keyof typeof STREAMING_SERVICES],
-          availableDate: 'Available Now'
-        }));
-        
-        allContent.push(...items);
-      } catch (err) {
-        console.error(`Error fetching popular from ${service}:`, err);
-      }
-    }
-    
-    return allContent;
-  } catch (error) {
-    console.error('Error in getPopularContent:', error);
     return [];
   }
 }
@@ -231,25 +205,34 @@ export async function searchContent(query: string, mediaType: 'movie' | 'tv'): P
     
     const shows = await response.json();
     
-    return shows.slice(0, 20).map((show: any) => {
-      const usStreaming = show.streamingInfo?.us || {};
-      const services = Object.keys(usStreaming)
-        .filter(s => STREAMING_SERVICES[s as keyof typeof STREAMING_SERVICES])
-        .map(s => STREAMING_SERVICES[s as keyof typeof STREAMING_SERVICES]);
+    const results = await Promise.all(
+      shows.slice(0, 20).map(async (show: any) => {
+        const usStreaming = show.streamingInfo?.us || {};
+        const services = Object.keys(usStreaming)
+          .filter(s => STREAMING_SERVICES[s as keyof typeof STREAMING_SERVICES])
+          .map(s => STREAMING_SERVICES[s as keyof typeof STREAMING_SERVICES]);
 
-      return {
-        id: show.id,
-        title: show.title,
-        overview: show.overview || 'No description available',
-        poster_path: show.imageSet?.verticalPoster?.w240 || show.imageSet?.verticalPoster?.w360 || null,
-        release_date: show.releaseYear ? `${show.releaseYear}-01-01` : show.firstAirYear ? `${show.firstAirYear}-01-01` : '',
-        vote_average: show.rating || 0,
-        genre_ids: show.genres?.map((g: any) => g.id) || [],
-        media_type: mediaType,
-        providers: services,
-        service: services.length > 0 ? services.join(', ') : 'Available on streaming'
-      };
-    });
+        const imdbRating = show.imdbId ? await getIMDbRating(show.imdbId) : '';
+
+        return {
+          id: show.id,
+          title: show.title,
+          overview: show.overview || 'No description available',
+          poster_path: show.imageSet?.verticalPoster?.w240 || show.imageSet?.verticalPoster?.w360 || null,
+          release_date: show.releaseYear ? `${show.releaseYear}-01-01` : show.firstAirYear ? `${show.firstAirYear}-01-01` : '',
+          vote_average: show.rating || 0,
+          genre_ids: show.genres?.map((g: any) => g.id) || [],
+          media_type: mediaType,
+          providers: services,
+          service: services.length > 0 ? services.join(', ') : 'Available on streaming',
+          imdbRating,
+          imdbId: show.imdbId,
+          year: show.releaseYear?.toString() || show.firstAirYear?.toString()
+        };
+      })
+    );
+    
+    return results;
   } catch (error) {
     console.error('Error searching:', error);
     return [];

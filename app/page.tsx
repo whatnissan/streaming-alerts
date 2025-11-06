@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import MediaCard from '@/components/MediaCard';
 import FilterBar from '@/components/FilterBar';
 import SearchBar from '@/components/SearchBar';
+import AIRecommendations from '@/components/AIRecommendations';
 import { MediaItem } from '@/lib/types';
 import { getUpcomingContent, searchContent, filterByDate, getReleaseDate } from '@/lib/tmdb';
 
@@ -13,6 +14,7 @@ export default function Home() {
   const [filteredContent, setFilteredContent] = useState<MediaItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [likedItems, setLikedItems] = useState<MediaItem[]>([]);
   
   const [selectedGenre, setSelectedGenre] = useState('all');
   const [dateFilter, setDateFilter] = useState('all');
@@ -59,6 +61,19 @@ export default function Home() {
     setLoading(false);
   };
 
+  const handleCardClick = (item: MediaItem) => {
+    setLikedItems(prev => {
+      const isLiked = prev.some(i => i.id === item.id);
+      if (isLiked) {
+        return prev.filter(i => i.id !== item.id);
+      } else {
+        return [...prev, item];
+      }
+    });
+  };
+
+  const isLiked = (itemId: string) => likedItems.some(i => i.id === itemId);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
       <div className="container mx-auto px-4 py-8 max-w-7xl">
@@ -67,9 +82,12 @@ export default function Home() {
             🎬 Streaming Alerts
           </h1>
           <p className="text-gray-600 dark:text-gray-400 text-lg">
-            New & upcoming on Netflix, Prime, Disney+, HBO Max & Apple TV+
+            New & upcoming on Netflix, Prime, Disney+, HBO Max, Hulu, Paramount+ & Apple TV+
           </p>
         </header>
+
+        {/* AI Recommendations Section */}
+        <AIRecommendations likedItems={likedItems} allContent={content} />
 
         <SearchBar onSearch={handleSearch} />
 
@@ -87,7 +105,10 @@ export default function Home() {
             {searchQuery ? (
               <p>Found {filteredContent.length} results for "{searchQuery}"</p>
             ) : (
-              <p>Showing {filteredContent.length} {mediaType === 'movie' ? 'movies' : 'TV shows'}</p>
+              <>
+                <p>Showing {filteredContent.length} {mediaType === 'movie' ? 'movies' : 'TV shows'}</p>
+                <p className="text-sm mt-1">💡 Click on shows you like to get AI recommendations!</p>
+              </>
             )}
           </div>
         )}
@@ -101,7 +122,14 @@ export default function Home() {
         {!loading && filteredContent.length > 0 && (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 md:gap-6">
             {filteredContent.map((item) => (
-              <MediaCard key={item.id} item={item} />
+              <div key={item.id} className="relative">
+                {isLiked(item.id) && (
+                  <div className="absolute -top-2 -right-2 z-10 bg-pink-500 text-white rounded-full w-8 h-8 flex items-center justify-center shadow-lg">
+                    ❤️
+                  </div>
+                )}
+                <MediaCard item={item} onClick={() => handleCardClick(item)} />
+              </div>
             ))}
           </div>
         )}
@@ -121,7 +149,8 @@ export default function Home() {
         )}
 
         <footer className="mt-16 text-center text-sm text-gray-500 dark:text-gray-400 border-t border-gray-200 dark:border-gray-700 pt-8">
-          <p>Data provided by Streaming Availability API</p>
+          <p>Data provided by Streaming Availability API & OMDb</p>
+          <p className="mt-1">AI recommendations powered by OpenAI</p>
         </footer>
       </div>
     </div>
