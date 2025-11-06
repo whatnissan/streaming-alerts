@@ -19,11 +19,6 @@ export default function MediaCard({ item, onClick }: MediaCardProps) {
     .filter(Boolean)
     .join(', ');
 
-  // Determine data source from ID prefix
-  const dataSource = item.id.startsWith('wm-') ? 'Watchmode' : 
-                     item.id.startsWith('sa-') ? 'Streaming Avail' : 'Unknown';
-  const sourceColor = item.id.startsWith('wm-') ? 'bg-green-500' : 'bg-blue-500';
-
   return (
     <div 
       className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden hover:shadow-xl transition-shadow duration-300 cursor-pointer"
@@ -49,11 +44,6 @@ export default function MediaCard({ item, onClick }: MediaCardProps) {
           {item.media_type === 'movie' ? 'Movie' : 'TV Show'}
         </div>
 
-        {/* Data Source Badge */}
-        <div className={`absolute bottom-2 left-2 ${sourceColor} text-white text-xs px-2 py-1 rounded font-semibold`}>
-          {dataSource}
-        </div>
-
         {item.imdbRating && (
           <div className="absolute top-2 left-2 bg-yellow-500 text-black text-xs font-bold px-2 py-1 rounded flex items-center gap-1">
             <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
@@ -71,13 +61,6 @@ export default function MediaCard({ item, onClick }: MediaCardProps) {
         
         <div className="mb-3">
           <div className="flex items-center justify-between text-sm mb-2">
-            <span className="flex items-center text-gray-600 dark:text-gray-400">
-              <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
-              </svg>
-              {item.availableDate || formatDate(item.release_date)}
-            </span>
-            
             {item.year && (
               <span className="text-gray-500 dark:text-gray-400">
                 {item.year}
@@ -88,7 +71,7 @@ export default function MediaCard({ item, onClick }: MediaCardProps) {
           {item.service && (
             <div className="mb-2">
               <span className="inline-block text-xs font-semibold bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-3 py-1 rounded-full">
-                {item.availableDate?.includes('Added') ? 'On ' : 'Coming to '}{item.service}
+                {item.availableDate?.includes('Coming') ? 'Coming to ' : 'On '}{item.service}
               </span>
             </div>
           )}

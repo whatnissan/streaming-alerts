@@ -64,8 +64,14 @@ export async function getStreamingContent(mediaType: 'movie' | 'tv'): Promise<Me
             
             const details = await detailRes.json();
             
-            // If we got it from this source query, we know it's on this service
-            // Don't filter - just use the service we queried
+            // Try to find when it was added to this service
+            let addedDate = 'Now';
+            const source = details.sources?.find((s: any) => s.source_id === service.id);
+            if (source?.date_added) {
+              const date = new Date(source.date_added * 1000);
+              addedDate = date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+            }
+            
             const imdbRating = details.imdb_id ? await getOMDbRating(details.imdb_id) : '';
             const genreNames: string[] = Array.isArray(details.genre_names) ? details.genre_names : [];
             
@@ -80,7 +86,7 @@ export async function getStreamingContent(mediaType: 'movie' | 'tv'): Promise<Me
               media_type: mediaType,
               providers: [service.name],
               service: service.name,
-              availableDate: 'Streaming Now',
+              availableDate: addedDate !== 'Now' ? `Since ${addedDate}` : 'Streaming Now',
               imdbRating,
               imdbId: details.imdb_id,
               year: details.year?.toString()
