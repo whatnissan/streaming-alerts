@@ -57,14 +57,16 @@ export async function getUpcomingContent(mediaType: 'movie' | 'tv'): Promise<Med
         
         const usSources = details.sources?.filter((s: any) => s.region === 'US') || details.sources || [];
         
-        const services = usSources
+        const serviceNames: string[] = usSources
           .filter((s: any) => SERVICE_MAP[s.source_id])
           .map((s: any) => SERVICE_MAP[s.source_id]);
         
-        const uniqueServices = [...new Set(services)];
+        const uniqueServices: string[] = Array.from(new Set(serviceNames));
         
         if (uniqueServices.length > 0) {
           const imdbRating = details.imdb_id ? await getOMDbRating(details.imdb_id) : '';
+          
+          const genreNames: string[] = Array.isArray(details.genre_names) ? details.genre_names : [];
           
           items.push({
             id: details.id.toString(),
@@ -73,7 +75,7 @@ export async function getUpcomingContent(mediaType: 'movie' | 'tv'): Promise<Med
             poster_path: details.poster || null,
             release_date: details.year ? `${details.year}-01-01` : '',
             vote_average: details.user_rating || 0,
-            genre_ids: details.genre_names || [],
+            genre_ids: genreNames,
             media_type: mediaType,
             providers: uniqueServices,
             service: uniqueServices[0],
