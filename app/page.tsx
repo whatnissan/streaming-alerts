@@ -5,6 +5,7 @@ import MediaCard from '@/components/MediaCard';
 import FilterBar from '@/components/FilterBar';
 import SearchBar from '@/components/SearchBar';
 import AIRecommendations from '@/components/AIRecommendations';
+import DataSourceStats from '@/components/DataSourceStats';
 import { MediaItem } from '@/lib/types';
 import { getUpcomingContent, searchContent, filterByDate, getReleaseDate } from '@/lib/tmdb';
 
@@ -86,6 +87,9 @@ export default function Home() {
           </p>
         </header>
 
+        {/* Data Source Stats */}
+        {!loading && <DataSourceStats content={content} />}
+
         {/* AI Recommendations Section */}
         <AIRecommendations likedItems={likedItems} allContent={content} />
 
@@ -149,7 +153,7 @@ export default function Home() {
         )}
 
         <footer className="mt-16 text-center text-sm text-gray-500 dark:text-gray-400 border-t border-gray-200 dark:border-gray-700 pt-8">
-          <p>Data provided by Streaming Availability API & OMDb</p>
+          <p>Data from Streaming Availability API, Watchmode API & OMDb</p>
           <p className="mt-1">AI recommendations powered by OpenAI</p>
         </footer>
       </div>

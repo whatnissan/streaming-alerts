@@ -19,6 +19,11 @@ export default function MediaCard({ item, onClick }: MediaCardProps) {
     .filter(Boolean)
     .join(', ');
 
+  // Determine data source from ID prefix
+  const dataSource = item.id.startsWith('wm-') ? 'Watchmode' : 
+                     item.id.startsWith('sa-') ? 'Streaming Avail' : 'Unknown';
+  const sourceColor = item.id.startsWith('wm-') ? 'bg-green-500' : 'bg-blue-500';
+
   return (
     <div 
       className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden hover:shadow-xl transition-shadow duration-300 cursor-pointer"
@@ -42,6 +47,11 @@ export default function MediaCard({ item, onClick }: MediaCardProps) {
         
         <div className="absolute top-2 right-2 bg-black bg-opacity-70 text-white text-xs px-2 py-1 rounded">
           {item.media_type === 'movie' ? 'Movie' : 'TV Show'}
+        </div>
+
+        {/* Data Source Badge */}
+        <div className={`absolute bottom-2 left-2 ${sourceColor} text-white text-xs px-2 py-1 rounded font-semibold`}>
+          {dataSource}
         </div>
 
         {item.imdbRating && (
