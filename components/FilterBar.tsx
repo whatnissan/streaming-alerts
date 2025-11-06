@@ -11,7 +11,22 @@ interface FilterBarProps {
   setMediaType: (type: 'movie' | 'tv') => void;
   contentType: 'streaming' | 'upcoming';
   setContentType: (type: 'streaming' | 'upcoming') => void;
+  selectedService: string;
+  setSelectedService: (service: string) => void;
 }
+
+const SERVICES = [
+  'Netflix',
+  'Amazon Prime',
+  'Hulu',
+  'Disney+',
+  'HBO Max',
+  'Paramount+',
+  'Apple TV+',
+  'Peacock',
+  'Tubi',
+  'Showtime',
+];
 
 export default function FilterBar({
   selectedGenre,
@@ -22,10 +37,12 @@ export default function FilterBar({
   setMediaType,
   contentType,
   setContentType,
+  selectedService,
+  setSelectedService,
 }: FilterBarProps) {
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 mb-6">
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         {/* Content Type Filter */}
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -38,6 +55,25 @@ export default function FilterBar({
           >
             <option value="streaming">🎬 Streaming Now</option>
             <option value="upcoming">📅 Coming Soon</option>
+          </select>
+        </div>
+
+        {/* Service Filter */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Service
+          </label>
+          <select
+            value={selectedService}
+            onChange={(e) => setSelectedService(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+          >
+            <option value="all">All Services</option>
+            {SERVICES.map((service) => (
+              <option key={service} value={service}>
+                {service}
+              </option>
+            ))}
           </select>
         </div>
 

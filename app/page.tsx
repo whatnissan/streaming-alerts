@@ -20,6 +20,7 @@ export default function Home() {
   
   const [selectedGenre, setSelectedGenre] = useState('all');
   const [dateFilter, setDateFilter] = useState('all');
+  const [selectedService, setSelectedService] = useState('all');
 
   useEffect(() => {
     const fetchContent = async () => {
@@ -37,17 +38,27 @@ export default function Home() {
   useEffect(() => {
     let filtered = [...content];
     if (searchQuery) return;
+    
+    // Filter by service
+    if (selectedService !== 'all') {
+      filtered = filtered.filter((item) => item.service === selectedService);
+    }
+    
+    // Filter by date
     if (dateFilter !== 'all') filtered = filterByDate(filtered, dateFilter);
+    
+    // Filter by genre
     if (selectedGenre !== 'all') {
       filtered = filtered.filter((item) => item.genre_ids?.includes(selectedGenre));
     }
+    
     filtered.sort((a, b) => {
       const dateA = new Date(getReleaseDate(a)).getTime();
       const dateB = new Date(getReleaseDate(b)).getTime();
       return dateA - dateB;
     });
     setFilteredContent(filtered);
-  }, [content, dateFilter, selectedGenre, searchQuery]);
+  }, [content, dateFilter, selectedGenre, selectedService, searchQuery]);
 
   const handleSearch = async (query: string) => {
     setSearchQuery(query);
@@ -60,6 +71,9 @@ export default function Home() {
     let filtered = results;
     if (selectedGenre !== 'all') {
       filtered = filtered.filter((item) => item.genre_ids?.includes(selectedGenre));
+    }
+    if (selectedService !== 'all') {
+      filtered = filtered.filter((item) => item.service === selectedService);
     }
     setFilteredContent(filtered);
     setLoading(false);
@@ -107,6 +121,8 @@ export default function Home() {
           setMediaType={setMediaType}
           contentType={contentType}
           setContentType={setContentType}
+          selectedService={selectedService}
+          setSelectedService={setSelectedService}
         />
 
         {!loading && (
@@ -115,7 +131,7 @@ export default function Home() {
               <p>Found {filteredContent.length} results for "{searchQuery}"</p>
             ) : (
               <>
-                <p>Showing {filteredContent.length} {contentType === 'streaming' ? 'streaming' : 'upcoming'} {mediaType === 'movie' ? 'movies' : 'TV shows'}</p>
+                <p>Showing {filteredContent.length} {selectedService !== 'all' ? `${selectedService} ` : ''}{contentType === 'streaming' ? 'streaming' : 'upcoming'} {mediaType === 'movie' ? 'movies' : 'TV shows'}</p>
                 <p className="text-sm mt-1">💡 Click on shows you like to get AI recommendations!</p>
               </>
             )}
