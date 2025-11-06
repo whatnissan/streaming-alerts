@@ -1,27 +1,12 @@
 import { MediaItem } from './types';
 import { getTMDBStreaming, getTMDBUpcoming } from './tmdb-api';
-import { getTraktTrending, getTraktAnticipated } from './trakt-api';
 
 export async function getStreamingContent(mediaType: 'movie' | 'tv'): Promise<MediaItem[]> {
   try {
-    console.log('Fetching from multiple sources...');
-    
-    // Fetch from both TMDB and Trakt in parallel
-    const [tmdbContent, traktContent] = await Promise.all([
-      getTMDBStreaming(mediaType),
-      getTraktTrending(mediaType)
-    ]);
-    
-    console.log(`TMDB: ${tmdbContent.length}, Trakt: ${traktContent.length}`);
-    
-    // Combine and remove duplicates by title
-    const allContent = [...tmdbContent, ...traktContent];
-    const uniqueContent = Array.from(
-      new Map(allContent.map(item => [item.title.toLowerCase(), item])).values()
-    );
-    
-    console.log(`Total unique streaming items: ${uniqueContent.length}`);
-    return uniqueContent;
+    console.log('Fetching streaming from TMDB...');
+    const tmdbContent = await getTMDBStreaming(mediaType);
+    console.log(`Total streaming items: ${tmdbContent.length}`);
+    return tmdbContent;
   } catch (error) {
     console.error('Error:', error);
     return [];
@@ -30,22 +15,10 @@ export async function getStreamingContent(mediaType: 'movie' | 'tv'): Promise<Me
 
 export async function getUpcomingContent(mediaType: 'movie' | 'tv'): Promise<MediaItem[]> {
   try {
-    console.log('Fetching upcoming from multiple sources...');
-    
-    const [tmdbContent, traktContent] = await Promise.all([
-      getTMDBUpcoming(mediaType),
-      getTraktAnticipated(mediaType)
-    ]);
-    
-    console.log(`TMDB upcoming: ${tmdbContent.length}, Trakt anticipated: ${traktContent.length}`);
-    
-    const allContent = [...tmdbContent, ...traktContent];
-    const uniqueContent = Array.from(
-      new Map(allContent.map(item => [item.title.toLowerCase(), item])).values()
-    );
-    
-    console.log(`Total unique upcoming items: ${uniqueContent.length}`);
-    return uniqueContent;
+    console.log('Fetching upcoming from TMDB...');
+    const tmdbContent = await getTMDBUpcoming(mediaType);
+    console.log(`Total upcoming items: ${tmdbContent.length}`);
+    return tmdbContent;
   } catch (error) {
     console.error('Error:', error);
     return [];
