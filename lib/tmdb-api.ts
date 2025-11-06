@@ -10,11 +10,16 @@ const PROVIDER_MAP: { [key: number]: string } = {
   15: 'Hulu',
   531: 'Paramount+',
   384: 'HBO Max',
+  1899: 'Max',
   337: 'Disney+',
   350: 'Apple TV+',
   386: 'Peacock',
   73: 'Tubi',
   43: 'Showtime',
+  47: 'Showtime',
+  37: 'Showtime',
+  1853: 'Paramount+ with Showtime',
+  300: 'Pluto TV',
 };
 
 async function getOMDbRating(imdbId: string): Promise<string> {
@@ -37,9 +42,9 @@ export async function getTMDBStreaming(mediaType: 'movie' | 'tv'): Promise<Media
     const endpoint = mediaType === 'movie' ? 'movie/popular' : 'tv/popular';
     const allItems: MediaItem[] = [];
     
-    console.log('📡 Fetching from TMDB... Key:', TMDB_KEY.substring(0, 10) + '...');
+    console.log('📡 Fetching from TMDB...');
     
-    for (let page = 1; page <= 3; page++) {
+    for (let page = 1; page <= 5; page++) {
       const url = `${TMDB_BASE}/${endpoint}?api_key=${TMDB_KEY}&language=en-US&page=${page}`;
       const response = await fetch(url, { cache: 'no-store' });
       
@@ -66,9 +71,16 @@ export async function getTMDBStreaming(mediaType: 'movie' | 'tv'): Promise<Media
           const providerData = await providerRes.json();
           const usProviders = providerData.results?.US;
           
-          if (!usProviders?.flatrate) continue;
+          if (!usProviders) continue;
           
-          const serviceList = usProviders.flatrate
+          // Collect providers from all sources: flatrate (subscription), buy, rent, ads
+          const allProviders = [
+            ...(usProviders.flatrate || []),
+            ...(usProviders.free || []),
+            ...(usProviders.ads || [])
+          ];
+          
+          const serviceList = allProviders
             .filter((p: any) => PROVIDER_MAP[p.provider_id])
             .map((p: any) => PROVIDER_MAP[p.provider_id] as string);
           
@@ -110,7 +122,7 @@ export async function getTMDBStreaming(mediaType: 'movie' | 'tv'): Promise<Media
             year: (item.release_date || item.first_air_date)?.split('-')[0]
           });
           
-          if (allItems.length % 10 === 0) {
+          if (allItems.length % 20 === 0) {
             console.log(`✓ Processed ${allItems.length} items...`);
           }
         } catch (err) {
@@ -139,7 +151,7 @@ export async function getTMDBUpcoming(mediaType: 'movie' | 'tv'): Promise<MediaI
     
     console.log('📡 Fetching upcoming from TMDB...');
     
-    for (let page = 1; page <= 3; page++) {
+    for (let page = 1; page <= 5; page++) {
       const url = `${TMDB_BASE}/${endpoint}?api_key=${TMDB_KEY}&language=en-US&page=${page}&region=US`;
       const response = await fetch(url, { cache: 'no-store' });
       
@@ -165,8 +177,14 @@ export async function getTMDBUpcoming(mediaType: 'movie' | 'tv'): Promise<MediaI
             const providerData = await providerRes.json();
             const usProviders = providerData.results?.US;
             
-            if (usProviders?.flatrate) {
-              const providerServices = usProviders.flatrate
+            if (usProviders) {
+              const allProviders = [
+                ...(usProviders.flatrate || []),
+                ...(usProviders.free || []),
+                ...(usProviders.ads || [])
+              ];
+              
+              const providerServices = allProviders
                 .filter((p: any) => PROVIDER_MAP[p.provider_id])
                 .map((p: any) => PROVIDER_MAP[p.provider_id] as string);
               
