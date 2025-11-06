@@ -4,7 +4,7 @@ const TMDB_KEY = process.env.NEXT_PUBLIC_TMDB_KEY || '';
 const OMDB_KEY = process.env.NEXT_PUBLIC_OMDB_KEY || '';
 const TMDB_BASE = 'https://api.themoviedb.org/3';
 
-// Expanded provider map with all known IDs
+// Comprehensive provider map
 const PROVIDER_MAP: { [key: number]: string } = {
   8: 'Netflix',
   9: 'Amazon Prime',
@@ -15,6 +15,9 @@ const PROVIDER_MAP: { [key: number]: string } = {
   582: 'Paramount+',
   384: 'HBO Max',
   1899: 'Max',
+  387: 'HBO',
+  31: 'HBO Max',
+  118: 'HBO Max',
   337: 'Disney+',
   390: 'Disney+',
   350: 'Apple TV+',
@@ -25,6 +28,7 @@ const PROVIDER_MAP: { [key: number]: string } = {
   43: 'Showtime',
   37: 'Showtime',
   1853: 'Showtime',
+  642: 'Showtime',
   300: 'Pluto TV',
   279: 'Pluto TV',
 };
@@ -76,16 +80,13 @@ export async function getTMDBStreaming(mediaType: 'movie' | 'tv'): Promise<Media
           
           if (!usProviders) continue;
           
-          // Collect ALL providers and log unknown ones
           const allProviders = [
             ...(usProviders.flatrate || []),
             ...(usProviders.free || []),
-            ...(usProviders.ads || []),
-            ...(usProviders.buy || []),
-            ...(usProviders.rent || [])
+            ...(usProviders.ads || [])
           ];
           
-          // Log providers we don't recognize
+          // Log unknown providers for debugging
           allProviders.forEach((p: any) => {
             if (!PROVIDER_MAP[p.provider_id]) {
               unknownProviders.add(p.provider_id);
@@ -141,7 +142,9 @@ export async function getTMDBStreaming(mediaType: 'movie' | 'tv'): Promise<Media
     }
     
     console.log(`🎬 Total TMDB items: ${allItems.length}`);
-    console.log(`📊 Unknown provider IDs found: ${Array.from(unknownProviders).join(', ')}`);
+    if (unknownProviders.size > 0) {
+      console.log(`📊 Unknown provider IDs: ${Array.from(unknownProviders).join(', ')}`);
+    }
     return allItems;
   } catch (error) {
     console.error('❌ TMDB error:', error);
@@ -189,9 +192,7 @@ export async function getTMDBUpcoming(mediaType: 'movie' | 'tv'): Promise<MediaI
               const allProviders = [
                 ...(usProviders.flatrate || []),
                 ...(usProviders.free || []),
-                ...(usProviders.ads || []),
-                ...(usProviders.buy || []),
-                ...(usProviders.rent || [])
+                ...(usProviders.ads || [])
               ];
               
               const providerServices = allProviders
@@ -205,10 +206,30 @@ export async function getTMDBUpcoming(mediaType: 'movie' | 'tv'): Promise<MediaI
             }
           }
           
+          // Format the release date nicely
           const releaseDate = item.release_date || item.first_air_date;
-          const formattedDate = releaseDate 
-            ? new Date(releaseDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-            : 'TBA';
+          let formattedDate = 'TBA';
+          
+          if (releaseDate) {
+            const date = new Date(releaseDate);
+            const now = new Date();
+            const diffTime = date.getTime() - now.getTime();
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            
+            if (diffDays < 0) {
+              // Already released
+              formattedDate = date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+            } else if (diffDays <= 7) {
+              // Within a week
+              formattedDate = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            } else if (diffDays <= 30) {
+              // Within a month
+              formattedDate = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            } else {
+              // More than a month away
+              formattedDate = date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+            }
+          }
           
           const detailUrl = `${TMDB_BASE}/${mediaType}/${item.id}/external_ids?api_key=${TMDB_KEY}`;
           const detailRes = await fetch(detailUrl, { cache: 'no-store' });
