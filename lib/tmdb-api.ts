@@ -28,22 +28,33 @@ async function getOMDbRating(imdbId: string): Promise<string> {
 }
 
 export async function getTMDBStreaming(mediaType: 'movie' | 'tv'): Promise<MediaItem[]> {
+  if (!TMDB_KEY) {
+    console.error('❌ TMDB API key not found!');
+    return [];
+  }
+  
   try {
     const endpoint = mediaType === 'movie' ? 'movie/popular' : 'tv/popular';
     const allItems: MediaItem[] = [];
     
-    console.log('Fetching from TMDB...');
+    console.log('📡 Fetching from TMDB... Key:', TMDB_KEY.substring(0, 10) + '...');
     
     for (let page = 1; page <= 3; page++) {
       const url = `${TMDB_BASE}/${endpoint}?api_key=${TMDB_KEY}&language=en-US&page=${page}`;
       const response = await fetch(url, { cache: 'no-store' });
       
-      if (!response.ok) continue;
+      if (!response.ok) {
+        console.error(`❌ TMDB page ${page} error: ${response.status} - ${response.statusText}`);
+        if (response.status === 401) {
+          console.error('🔑 Invalid TMDB API key! Check Railway variables.');
+        }
+        continue;
+      }
       
       const data = await response.json();
       const results = data.results || [];
       
-      console.log(`TMDB page ${page}: ${results.length} items`);
+      console.log(`✅ TMDB page ${page}: ${results.length} items`);
       
       for (const item of results) {
         try {
@@ -99,38 +110,48 @@ export async function getTMDBStreaming(mediaType: 'movie' | 'tv'): Promise<Media
             year: (item.release_date || item.first_air_date)?.split('-')[0]
           });
           
-          console.log(`✓ ${item.title || item.name} on ${uniqueServices.join(', ')}`);
+          if (allItems.length % 10 === 0) {
+            console.log(`✓ Processed ${allItems.length} items...`);
+          }
         } catch (err) {
           console.error('Error processing item:', err);
         }
       }
     }
     
-    console.log(`Total TMDB items: ${allItems.length}`);
+    console.log(`🎬 Total TMDB items: ${allItems.length}`);
     return allItems;
   } catch (error) {
-    console.error('TMDB error:', error);
+    console.error('❌ TMDB error:', error);
     return [];
   }
 }
 
 export async function getTMDBUpcoming(mediaType: 'movie' | 'tv'): Promise<MediaItem[]> {
+  if (!TMDB_KEY) {
+    console.error('❌ TMDB API key not found!');
+    return [];
+  }
+  
   try {
     const endpoint = mediaType === 'movie' ? 'movie/upcoming' : 'tv/on_the_air';
     const allItems: MediaItem[] = [];
     
-    console.log('Fetching upcoming from TMDB...');
+    console.log('📡 Fetching upcoming from TMDB...');
     
     for (let page = 1; page <= 3; page++) {
       const url = `${TMDB_BASE}/${endpoint}?api_key=${TMDB_KEY}&language=en-US&page=${page}&region=US`;
       const response = await fetch(url, { cache: 'no-store' });
       
-      if (!response.ok) continue;
+      if (!response.ok) {
+        console.error(`❌ TMDB upcoming page ${page} error: ${response.status}`);
+        continue;
+      }
       
       const data = await response.json();
       const results = data.results || [];
       
-      console.log(`TMDB upcoming page ${page}: ${results.length} items`);
+      console.log(`✅ TMDB upcoming page ${page}: ${results.length} items`);
       
       for (const item of results) {
         try {
@@ -194,18 +215,16 @@ export async function getTMDBUpcoming(mediaType: 'movie' | 'tv'): Promise<MediaI
             imdbId,
             year: releaseDate?.split('-')[0]
           });
-          
-          console.log(`✓ ${item.title || item.name} - ${serviceName} on ${formattedDate}`);
         } catch (err) {
           console.error('Error processing upcoming item:', err);
         }
       }
     }
     
-    console.log(`Total TMDB upcoming: ${allItems.length}`);
+    console.log(`🎬 Total TMDB upcoming: ${allItems.length}`);
     return allItems;
   } catch (error) {
-    console.error('TMDB upcoming error:', error);
+    console.error('❌ TMDB upcoming error:', error);
     return [];
   }
 }
