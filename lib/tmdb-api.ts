@@ -5,7 +5,6 @@ const OMDB_KEY = process.env.NEXT_PUBLIC_OMDB_KEY || '';
 const OPENAI_KEY = process.env.NEXT_PUBLIC_OPENAI_KEY || '';
 const TMDB_BASE = 'https://api.themoviedb.org/3';
 
-// Comprehensive provider map
 const PROVIDER_MAP: { [key: number]: string } = {
   8: 'Netflix',
   9: 'Amazon Prime',
@@ -44,41 +43,43 @@ async function getOMDbRating(imdbId: string): Promise<string> {
   } catch { return ''; }
 }
 
-// AI-powered service prediction for upcoming content
-async function predictStreamingService(title: string, overview: string, releaseDate: string): Promise<string> {
-  if (!OPENAI_KEY) return 'TBA';
+// Predict service based on patterns (no AI needed for most)
+function predictServiceFromPatterns(title: string, overview: string): string {
+  const text = (title + ' ' + overview).toLowerCase();
   
-  try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${OPENAI_KEY}`
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: [{
-          role: 'system',
-          content: 'You are a streaming service expert. Based on movie/show info, predict which streaming service it will likely premiere on. Only respond with ONE of: Netflix, Amazon Prime, Hulu, Disney+, Max, Apple TV+, Paramount+, Peacock, or TBA if truly unknown.'
-        }, {
-          role: 'user',
-          content: `Title: ${title}\nDescription: ${overview}\nRelease Date: ${releaseDate}\n\nWhich streaming service will this likely premiere on?`
-        }],
-        temperature: 0.3,
-        max_tokens: 20
-      })
-    });
-    
-    if (!response.ok) return 'TBA';
-    
-    const data = await response.json();
-    const prediction = data.choices[0]?.message?.content?.trim() || 'TBA';
-    console.log(`🤖 AI predicted ${title} → ${prediction}`);
-    return prediction;
-  } catch (error) {
-    console.error('AI prediction error:', error);
-    return 'TBA';
+  // Netflix patterns
+  if (text.includes('netflix') || text.includes('stranger things') || text.includes('bridgerton')) {
+    return 'Netflix';
   }
+  
+  // Disney+ patterns
+  if (text.includes('marvel') || text.includes('star wars') || text.includes('disney') || 
+      text.includes('pixar') || text.includes('mandalorian')) {
+    return 'Disney+';
+  }
+  
+  // Amazon Prime patterns
+  if (text.includes('amazon') || text.includes('prime video') || text.includes('rings of power')) {
+    return 'Amazon Prime';
+  }
+  
+  // Apple TV+ patterns
+  if (text.includes('apple') || text.includes('apple tv')) {
+    return 'Apple TV+';
+  }
+  
+  // HBO/Max patterns
+  if (text.includes('hbo') || text.includes('max') || text.includes('game of thrones') || 
+      text.includes('house of the dragon')) {
+    return 'Max';
+  }
+  
+  // Paramount+ patterns
+  if (text.includes('paramount') || text.includes('star trek')) {
+    return 'Paramount+';
+  }
+  
+  return 'TBA';
 }
 
 export async function getTMDBStreaming(mediaType: 'movie' | 'tv'): Promise<MediaItem[]> {
@@ -243,38 +244,28 @@ export async function getTMDBUpcoming(mediaType: 'movie' | 'tv'): Promise<MediaI
             }
           }
           
-          // If no service found, use AI to predict
-          if (serviceName === 'TBA' && OPENAI_KEY) {
-            const releaseDate = item.release_date || item.first_air_date || '';
-            serviceName = await predictStreamingService(
+          // If no service found, try pattern matching
+          if (serviceName === 'TBA') {
+            serviceName = predictServiceFromPatterns(
               item.title || item.name,
-              item.overview || '',
-              releaseDate
+              item.overview || ''
             );
             if (serviceName !== 'TBA') {
               services = [serviceName];
             }
           }
           
-          // Format the release date nicely
+          // Format the release date
           const releaseDate = item.release_date || item.first_air_date;
-          let formattedDate = 'Coming Soon';
+          let formattedDate = 'TBA';
           
           if (releaseDate) {
             const date = new Date(releaseDate);
-            const now = new Date();
-            const diffTime = date.getTime() - now.getTime();
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-            
-            if (diffDays < 0) {
-              formattedDate = 'Released ' + date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-            } else if (diffDays <= 7) {
-              formattedDate = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-            } else if (diffDays <= 30) {
-              formattedDate = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-            } else {
-              formattedDate = date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-            }
+            formattedDate = date.toLocaleDateString('en-US', { 
+              month: 'short', 
+              day: 'numeric',
+              year: 'numeric' 
+            });
           }
           
           const detailUrl = `${TMDB_BASE}/${mediaType}/${item.id}/external_ids?api_key=${TMDB_KEY}`;
@@ -310,6 +301,8 @@ export async function getTMDBUpcoming(mediaType: 'movie' | 'tv'): Promise<MediaI
             imdbId,
             year: releaseDate?.split('-')[0]
           });
+          
+          console.log(`✓ ${item.title || item.name} - ${serviceName} on ${formattedDate}`);
         } catch (err) {
           console.error('Error processing upcoming item:', err);
         }

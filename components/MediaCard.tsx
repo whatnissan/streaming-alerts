@@ -24,6 +24,7 @@ export default function MediaCard({ item, onClick }: MediaCardProps) {
             fill
             className="object-cover"
             sizes="(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 20vw"
+            unoptimized
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-300 to-gray-400 dark:from-gray-700 dark:to-gray-600">
@@ -36,21 +37,14 @@ export default function MediaCard({ item, onClick }: MediaCardProps) {
           </div>
         )}
         
-        {/* Service badge */}
-        {item.service && (
-          <div className="absolute top-2 left-2 bg-blue-600 text-white px-2 py-1 rounded text-xs font-semibold shadow-lg">
-            {item.service}
-          </div>
-        )}
-        
-        {/* Rating badge */}
+        {/* Rating badge - top right */}
         {item.vote_average > 0 && (
           <div className="absolute top-2 right-2 bg-yellow-500 text-white px-2 py-1 rounded text-xs font-bold shadow-lg">
             ⭐ {item.vote_average.toFixed(1)}
           </div>
         )}
 
-        {/* IMDb Rating */}
+        {/* IMDb Rating - below TMDB rating */}
         {item.imdbRating && (
           <div className="absolute top-10 right-2 bg-amber-600 text-white px-2 py-1 rounded text-xs font-bold shadow-lg">
             IMDb {item.imdbRating}
@@ -59,17 +53,24 @@ export default function MediaCard({ item, onClick }: MediaCardProps) {
       </div>
 
       <div className="p-3">
-        <h3 className="font-semibold text-sm mb-1 text-gray-900 dark:text-white line-clamp-2">
+        <h3 className="font-semibold text-sm mb-2 text-gray-900 dark:text-white line-clamp-2">
           {item.title}
         </h3>
         
+        {/* Service badge - in content area */}
+        {item.service && (
+          <div className="inline-block bg-blue-600 text-white px-2 py-1 rounded text-xs font-semibold mb-2">
+            {item.service}
+          </div>
+        )}
+        
         {/* Release/Available Date */}
         {item.availableDate && (
-          <div className="flex items-center text-xs text-gray-600 dark:text-gray-400 mb-2">
-            <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="flex items-center text-xs text-gray-600 dark:text-gray-400 mb-1">
+            <svg className="w-4 h-4 mr-1 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
-            {item.availableDate}
+            <span className="line-clamp-1">{item.availableDate}</span>
           </div>
         )}
 
