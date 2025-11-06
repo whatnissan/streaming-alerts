@@ -30,24 +30,31 @@ export async function getStreamingContent(mediaType: 'movie' | 'tv'): Promise<Me
   try {
     const type = mediaType === 'movie' ? 'movie' : 'tv_series';
     
-    // Get content by SOURCE (Netflix, Hulu, etc) to ensure they're currently available
-    const services = [203, 26, 157, 444, 387, 372, 371]; // Netflix, Prime, Hulu, etc
+    const services = [
+      { id: 203, name: 'Netflix' },
+      { id: 26, name: 'Amazon Prime' },
+      { id: 157, name: 'Hulu' },
+      { id: 444, name: 'Paramount+' },
+      { id: 387, name: 'HBO Max' },
+      { id: 372, name: 'Disney+' },
+      { id: 371, name: 'Apple TV+' }
+    ];
+    
     const allItems: MediaItem[] = [];
     
-    for (const sourceId of services) {
+    for (const service of services) {
       try {
-        const url = `https://api.watchmode.com/v1/list-titles/?apiKey=${WATCHMODE_KEY}&types=${type}&source_ids=${sourceId}&sort_by=popularity_desc&limit=20`;
+        const url = `https://api.watchmode.com/v1/list-titles/?apiKey=${WATCHMODE_KEY}&types=${type}&source_ids=${service.id}&sort_by=popularity_desc&limit=20`;
         
-        console.log(`Fetching from ${SERVICE_MAP[sourceId]}...`);
+        console.log(`Fetching from ${service.name}...`);
         const response = await fetch(url, { cache: 'no-store' });
         
         if (!response.ok) continue;
         
         const data = await response.json();
         const titles = data.titles || [];
-        console.log(`${SERVICE_MAP[sourceId]}: ${titles.length} titles`);
+        console.log(`${service.name}: ${titles.length} titles`);
         
-        // Get details for first 5 from each service
         for (let i = 0; i < Math.min(5, titles.length); i++) {
           const title = titles[i];
           try {
@@ -57,45 +64,38 @@ export async function getStreamingContent(mediaType: 'movie' | 'tv'): Promise<Me
             
             const details = await detailRes.json();
             
-            const serviceNames: string[] = details.sources
-              ?.filter((s: any) => SERVICE_MAP[s.source_id])
-              .map((s: any) => SERVICE_MAP[s.source_id]) || [];
+            // If we got it from this source query, we know it's on this service
+            // Don't filter - just use the service we queried
+            const imdbRating = details.imdb_id ? await getOMDbRating(details.imdb_id) : '';
+            const genreNames: string[] = Array.isArray(details.genre_names) ? details.genre_names : [];
             
-            const uniqueServices: string[] = Array.from(new Set(serviceNames));
+            allItems.push({
+              id: details.id.toString(),
+              title: details.title,
+              overview: details.plot_overview || 'No description available',
+              poster_path: details.poster || null,
+              release_date: details.year ? `${details.year}-01-01` : '',
+              vote_average: details.user_rating || 0,
+              genre_ids: genreNames,
+              media_type: mediaType,
+              providers: [service.name],
+              service: service.name,
+              availableDate: 'Streaming Now',
+              imdbRating,
+              imdbId: details.imdb_id,
+              year: details.year?.toString()
+            });
             
-            if (uniqueServices.length > 0) {
-              const imdbRating = details.imdb_id ? await getOMDbRating(details.imdb_id) : '';
-              const genreNames: string[] = Array.isArray(details.genre_names) ? details.genre_names : [];
-              
-              allItems.push({
-                id: details.id.toString(),
-                title: details.title,
-                overview: details.plot_overview || 'No description available',
-                poster_path: details.poster || null,
-                release_date: details.year ? `${details.year}-01-01` : '',
-                vote_average: details.user_rating || 0,
-                genre_ids: genreNames,
-                media_type: mediaType,
-                providers: uniqueServices,
-                service: uniqueServices[0],
-                availableDate: 'Streaming Now',
-                imdbRating,
-                imdbId: details.imdb_id,
-                year: details.year?.toString()
-              });
-              
-              console.log(`✓ ${details.title} on ${uniqueServices.join(', ')}`);
-            }
+            console.log(`✓ ${details.title} on ${service.name}`);
           } catch (err) {
             console.error('Error processing title:', err);
           }
         }
       } catch (err) {
-        console.error(`Error fetching ${SERVICE_MAP[sourceId]}:`, err);
+        console.error(`Error fetching ${service.name}:`, err);
       }
     }
     
-    // Remove duplicates
     const uniqueItems = Array.from(
       new Map(allItems.map(item => [item.id, item])).values()
     );
