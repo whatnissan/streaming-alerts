@@ -30,7 +30,6 @@ export async function getUpcomingContent(mediaType: 'movie' | 'tv'): Promise<Med
   try {
     const type = mediaType === 'movie' ? 'movie' : 'tv_series';
     
-    // Get POPULAR content that's currently available
     const url = `https://api.watchmode.com/v1/list-titles/?apiKey=${WATCHMODE_KEY}&types=${type}&limit=100&sort_by=popularity_desc`;
     
     console.log('Fetching popular titles from Watchmode...');
@@ -47,7 +46,6 @@ export async function getUpcomingContent(mediaType: 'movie' | 'tv'): Promise<Med
     
     const items: MediaItem[] = [];
     
-    // Process each title and check if it's on streaming
     for (let i = 0; i < titles.length && items.length < 30; i++) {
       const title = titles[i];
       try {
@@ -57,19 +55,15 @@ export async function getUpcomingContent(mediaType: 'movie' | 'tv'): Promise<Med
         
         const details = await detailRes.json();
         
-        // Check if it has US sources
         const usSources = details.sources?.filter((s: any) => s.region === 'US') || details.sources || [];
         
-        // Map to our services
         const services = usSources
           .filter((s: any) => SERVICE_MAP[s.source_id])
           .map((s: any) => SERVICE_MAP[s.source_id]);
         
-        // Get unique services
         const uniqueServices = [...new Set(services)];
         
         if (uniqueServices.length > 0) {
-          // Get IMDb rating if available
           const imdbRating = details.imdb_id ? await getOMDbRating(details.imdb_id) : '';
           
           items.push({
