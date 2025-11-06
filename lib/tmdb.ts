@@ -16,11 +16,21 @@ const SERVICE_MAP: { [key: number]: string } = {
   201: 'Tubi',
 };
 
+async function getOMDbRating(imdbId: string): Promise<string> {
+  if (!imdbId || !OMDB_KEY) return '';
+  try {
+    const response = await fetch(`https://www.omdbapi.com/?i=${imdbId}&apikey=${OMDB_KEY}`, { cache: 'force-cache' });
+    if (!response.ok) return '';
+    const data = await response.json();
+    return data.imdbRating && data.imdbRating !== 'N/A' ? data.imdbRating : '';
+  } catch { return ''; }
+}
+
 export async function getUpcomingContent(mediaType: 'movie' | 'tv'): Promise<MediaItem[]> {
   try {
     const type = mediaType === 'movie' ? 'movie' : 'tv_series';
     
-    // Get POPULAR content that's currently available (not upcoming)
+    // Get POPULAR content that's currently available
     const url = `https://api.watchmode.com/v1/list-titles/?apiKey=${WATCHMODE_KEY}&types=${type}&limit=100&sort_by=popularity_desc`;
     
     console.log('Fetching popular titles from Watchmode...');
@@ -59,6 +69,9 @@ export async function getUpcomingContent(mediaType: 'movie' | 'tv'): Promise<Med
         const uniqueServices = [...new Set(services)];
         
         if (uniqueServices.length > 0) {
+          // Get IMDb rating if available
+          const imdbRating = details.imdb_id ? await getOMDbRating(details.imdb_id) : '';
+          
           items.push({
             id: details.id.toString(),
             title: details.title,
@@ -71,7 +84,7 @@ export async function getUpcomingContent(mediaType: 'movie' | 'tv'): Promise<Med
             providers: uniqueServices,
             service: uniqueServices[0],
             availableDate: 'Streaming Now',
-            imdbRating: details.imdb_rating?.toString() || '',
+            imdbRating,
             imdbId: details.imdb_id,
             year: details.year?.toString()
           });
