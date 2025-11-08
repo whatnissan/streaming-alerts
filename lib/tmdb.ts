@@ -3,7 +3,7 @@ import { MediaItem } from './types';
 const TMDB_KEY = process.env.NEXT_PUBLIC_TMDB_KEY || '';
 const OMDB_KEY = process.env.NEXT_PUBLIC_OMDB_KEY || '';
 const TMDB_BASE = 'https://api.themoviedb.org/3';
-const RAPID_API_KEY = process.env.NEXT_PUBLIC_RAPIDAPI_KEY || '7da4fc2c3amsh140b819649305f3p15dd22jsn89b71a3586d5';
+const RAPID_API_KEY = '7da4fc2c3amsh140b819649305f3p15dd22jsn89b71a3586d5';
 
 const PROVIDER_MAP: { [key: number]: string } = {
   2: 'Apple TV+',
@@ -43,10 +43,11 @@ async function getOMDbRating(imdbId: string): Promise<string> {
 
 async function getStreamingAvailability(service: string): Promise<MediaItem[]> {
   try {
-    // Updated API v4 format - correct endpoint
-    const url = `https://streaming-availability.p.rapidapi.com/shows/search/filters?country=us&catalogs=${service}.subscription&show_type=movie&show_type=series&order_by=popularity_1month`;
+    // Streaming Availability API v4 format - CORRECTED
+    // Format: catalogs=SERVICE.TYPE where TYPE is subscription, free, addon, buy, rent
+    const url = `https://streaming-availability.p.rapidapi.com/shows/search/filters?country=us&catalogs=${service}.subscription&order_by=popularity_1month&output_language=en`;
     
-    console.log(`Calling Streaming API for ${service}...`);
+    console.log(`📡 Calling Streaming API: ${service}`);
     
     const response = await fetch(url, {
       method: 'GET',
@@ -57,20 +58,22 @@ async function getStreamingAvailability(service: string): Promise<MediaItem[]> {
       cache: 'no-store'
     });
     
-    console.log(`${service} response: ${response.status}`);
+    console.log(`Response ${service}: ${response.status}`);
     
     if (!response.ok) {
       const errorText = await response.text();
-      console.error(`Streaming API error for ${service}: ${response.status} - ${errorText.substring(0, 200)}`);
+      console.error(`❌ ${service}: ${response.status} - ${errorText.substring(0, 300)}`);
       return [];
     }
     
     const data = await response.json();
     
-    if (!data || !data.shows) {
-      console.log(`No shows data for ${service}`);
+    if (!data || !data.shows || data.shows.length === 0) {
+      console.log(`⚠️ ${service}: No shows returned`);
       return [];
     }
+    
+    console.log(`✅ ${service}: ${data.shows.length} shows found`);
     
     const items: MediaItem[] = data.shows.slice(0, 50).map((show: any) => {
       let posterPath = null;
@@ -86,7 +89,7 @@ async function getStreamingAvailability(service: string): Promise<MediaItem[]> {
         overview: show.overview || 'No description available',
         poster_path: posterPath,
         release_date: show.releaseYear?.toString() || show.firstAirYear?.toString() || '',
-        vote_average: show.rating || 0,
+        vote_average: (show.rating || 0) * 10,
         genre_ids: (show.genres || []).map((g: any) => g.id?.toString() || g.name || ''),
         media_type: show.showType === 'movie' ? 'movie' : 'tv',
         providers: [SERVICE_MAP[service] || service],
@@ -98,10 +101,11 @@ async function getStreamingAvailability(service: string): Promise<MediaItem[]> {
       };
     });
     
-    console.log(`✓ Streaming API: ${items.length} from ${SERVICE_MAP[service]}`);
+    console.log(`✓ Processed ${items.length} items from ${SERVICE_MAP[service]}`);
     return items;
+    
   } catch (error: any) {
-    console.error(`Streaming API exception for ${service}:`, error.message);
+    console.error(`❌ Exception for ${service}:`, error.message);
     return [];
   }
 }
@@ -320,13 +324,64 @@ async function getTMDBUpcomingFallback(mediaType: 'movie' | 'tv'): Promise<Media
 export async function getStreamingContent(mediaType: 'movie' | 'tv'): Promise<MediaItem[]> {
   try {
     console.log('🎬 Fetching streaming content...');
+    console.log('Using Streaming Availability API v4...');
     
-    // Just use TMDB - Streaming Availability API v4 requires different setup
-    console.log('Using TMDB (Streaming API v4 migration needed)...');
-    return getTMDBStreamingFallback(mediaType);
+    const services = ['netflix', 'prime', 'hulu', 'disney', 'hbo', 'apple', 'paramount', 'peacock', 'showtime'];
+    
+    const streamingPromises = services.map(service => 
+      getStreamingAvailability(service).catch((err) => {
+        console.error(`Failed to fetch ${service}:`, err);
+        return [];
+      })
+    );
+    
+    const streamingResults = await Promise.all(streamingPromises);
+    const streamingItems = streamingResults.flat();
+    
+    console.log(`📊 Streaming API returned: ${streamingItems.length} total items`);
+    
+    if (streamingItems.length >= 50) {
+      const filtered = streamingItems.filter(item => 
+        mediaType === 'movie' ? item.media_type === 'movie' : item.media_type === 'tv'
+      );
+      
+      const serviceCounts: {[key: string]: number} = {};
+      filtered.forEach(item => {
+        const service = item.service || 'Unknown';
+        serviceCounts[service] = (serviceCounts[service] || 0) + 1;
+      });
+      
+      console.log('📊 Results by service:');
+      Object.entries(serviceCounts).sort((a, b) => b[1] - a[1]).forEach(([service, count]) => {
+        console.log(`  ${service}: ${count}`);
+      });
+      
+      console.log(`✅ Using Streaming API: ${filtered.length} items`);
+      return filtered;
+    }
+    
+    console.log('⚠️ Streaming API insufficient, using TMDB fallback...');
+    const tmdbItems = await getTMDBStreamingFallback(mediaType);
+    
+    const combined = [...streamingItems, ...tmdbItems];
+    const seen = new Set<string>();
+    const deduplicated = combined.filter(item => {
+      const key = `${item.title.toLowerCase()}-${item.year}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    
+    const filtered = deduplicated.filter(item => 
+      mediaType === 'movie' ? item.media_type === 'movie' : item.media_type === 'tv'
+    );
+    
+    console.log(`✅ Total: ${filtered.length} items (${streamingItems.length} from Streaming API, ${tmdbItems.length} from TMDB)`);
+    
+    return filtered;
     
   } catch (error) {
-    console.error('Error:', error);
+    console.error('❌ Fatal error:', error);
     return getTMDBStreamingFallback(mediaType);
   }
 }
