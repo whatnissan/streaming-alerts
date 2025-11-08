@@ -1,26 +1,81 @@
 import { MediaItem } from './types';
 import { getTMDBStreaming, getTMDBUpcoming } from './tmdb-api';
+import { getWatchmodeNewReleases, getWatchmodeUpcoming } from './watchmode-api';
+
+const SERVICES = ['Netflix', 'Amazon Prime', 'Hulu', 'Disney+', 'Max', 'Apple TV+', 'Paramount+', 'Peacock'];
 
 export async function getStreamingContent(mediaType: 'movie' | 'tv'): Promise<MediaItem[]> {
   try {
-    console.log('Fetching streaming from TMDB...');
+    console.log('🎬 Fetching streaming content...');
+    
+    // Try Watchmode first for all services
+    const watchmodePromises = SERVICES.map(service => getWatchmodeNewReleases(service));
+    const watchmodeResults = await Promise.all(watchmodePromises);
+    const watchmodeContent = watchmodeResults.flat();
+    
+    console.log(`📊 Watchmode total: ${watchmodeContent.length}`);
+    
+    // Filter by media type if needed
+    const filtered = mediaType === 'movie' || mediaType === 'tv'
+      ? watchmodeContent.filter(item => item.media_type === mediaType)
+      : watchmodeContent;
+    
+    // If we got good data from Watchmode, use it
+    if (filtered.length > 50) {
+      console.log(`✅ Using Watchmode data: ${filtered.length} items`);
+      return filtered;
+    }
+    
+    // Fallback to TMDB if Watchmode fails
+    console.log('⚠️ Watchmode insufficient, falling back to TMDB...');
     const tmdbContent = await getTMDBStreaming(mediaType);
-    console.log(`Total streaming items: ${tmdbContent.length}`);
+    console.log(`📊 TMDB total: ${tmdbContent.length}`);
+    
     return tmdbContent;
   } catch (error) {
-    console.error('Error:', error);
+    console.error('❌ Error fetching streaming:', error);
     return [];
   }
 }
 
 export async function getUpcomingContent(mediaType: 'movie' | 'tv'): Promise<MediaItem[]> {
   try {
-    console.log('Fetching upcoming from TMDB...');
+    console.log('🎬 Fetching upcoming content...');
+    
+    // Try Watchmode first
+    const watchmodePromises = SERVICES.map(service => getWatchmodeUpcoming(service));
+    const watchmodeResults = await Promise.all(watchmodePromises);
+    const watchmodeContent = watchmodeResults.flat();
+    
+    console.log(`📊 Watchmode upcoming total: ${watchmodeContent.length}`);
+    
+    // Filter by media type and ensure it's actually upcoming
+    const today = new Date();
+    const filtered = watchmodeContent.filter(item => {
+      const matchesType = mediaType === 'movie' || mediaType === 'tv' ? item.media_type === mediaType : true;
+      const isUpcoming = item.release_date ? new Date(item.release_date) > today : false;
+      return matchesType && isUpcoming;
+    });
+    
+    if (filtered.length > 20) {
+      console.log(`✅ Using Watchmode upcoming: ${filtered.length} items`);
+      return filtered;
+    }
+    
+    // Fallback to TMDB
+    console.log('⚠️ Watchmode insufficient, falling back to TMDB...');
     const tmdbContent = await getTMDBUpcoming(mediaType);
-    console.log(`Total upcoming items: ${tmdbContent.length}`);
-    return tmdbContent;
+    
+    // Filter out past dates
+    const upcomingOnly = tmdbContent.filter(item => {
+      if (!item.release_date) return false;
+      return new Date(item.release_date) > today;
+    });
+    
+    console.log(`📊 TMDB upcoming total: ${upcomingOnly.length}`);
+    return upcomingOnly;
   } catch (error) {
-    console.error('Error:', error);
+    console.error('❌ Error fetching upcoming:', error);
     return [];
   }
 }
