@@ -2,17 +2,20 @@ import { MediaItem } from './types';
 
 const WATCHMODE_KEY = process.env.NEXT_PUBLIC_WATCHMODE_KEY || '';
 
-// Watchmode source IDs for streaming services
+// Updated Watchmode source IDs - verified correct IDs
 const SERVICE_MAP: { [key: string]: number } = {
   'Netflix': 203,
   'Amazon Prime': 26,
   'Hulu': 157,
   'Disney+': 372,
   'Max': 387,
+  'HBO Max': 387,
   'Apple TV+': 371,
   'Paramount+': 444,
   'Peacock': 389,
   'Showtime': 37,
+  'Tubi': 234,
+  'Pluto TV': 300,
 };
 
 export async function getWatchmodeNewReleases(service: string): Promise<MediaItem[]> {
@@ -28,15 +31,14 @@ export async function getWatchmodeNewReleases(service: string): Promise<MediaIte
   }
 
   try {
-    // Get titles added in the last 30 days
     const url = `https://api.watchmode.com/v1/list-titles/?apiKey=${WATCHMODE_KEY}&source_ids=${sourceId}&sort_by=relevance_desc&limit=100`;
     
-    console.log(`📡 Fetching new releases for ${service}...`);
+    console.log(`📡 Fetching new releases for ${service} (ID: ${sourceId})...`);
     
     const response = await fetch(url, { cache: 'no-store' });
     
     if (!response.ok) {
-      console.error(`❌ Watchmode error: ${response.status}`);
+      console.error(`❌ Watchmode error for ${service}: ${response.status}`);
       return [];
     }
     
@@ -64,7 +66,7 @@ export async function getWatchmodeNewReleases(service: string): Promise<MediaIte
     
     return items;
   } catch (error) {
-    console.error('❌ Watchmode error:', error);
+    console.error(`❌ Watchmode error for ${service}:`, error);
     return [];
   }
 }
@@ -82,16 +84,15 @@ export async function getWatchmodeUpcoming(service: string): Promise<MediaItem[]
   }
 
   try {
-    // Get upcoming titles for this service
     const today = new Date().toISOString().split('T')[0];
     const url = `https://api.watchmode.com/v1/list-titles/?apiKey=${WATCHMODE_KEY}&source_ids=${sourceId}&release_date_start=${today}&sort_by=release_date_asc&limit=100`;
     
-    console.log(`📡 Fetching upcoming for ${service}...`);
+    console.log(`📡 Fetching upcoming for ${service} (ID: ${sourceId})...`);
     
     const response = await fetch(url, { cache: 'no-store' });
     
     if (!response.ok) {
-      console.error(`❌ Watchmode error: ${response.status}`);
+      console.error(`❌ Watchmode upcoming error for ${service}: ${response.status}`);
       return [];
     }
     
@@ -117,7 +118,7 @@ export async function getWatchmodeUpcoming(service: string): Promise<MediaItem[]
         media_type: item.type === 'movie' ? 'movie' : 'tv',
         providers: [service],
         service: service,
-        availableDate: `Coming ${formattedDate}`,
+        availableDate: formattedDate,
         imdbRating: item.imdb_rating?.toString() || '',
         imdbId: item.imdb_id || '',
         year: item.year?.toString() || ''
@@ -126,7 +127,7 @@ export async function getWatchmodeUpcoming(service: string): Promise<MediaItem[]
     
     return items;
   } catch (error) {
-    console.error('❌ Watchmode error:', error);
+    console.error(`❌ Watchmode upcoming error for ${service}:`, error);
     return [];
   }
 }

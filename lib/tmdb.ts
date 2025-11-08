@@ -2,18 +2,42 @@ import { MediaItem } from './types';
 import { getTMDBStreaming, getTMDBUpcoming } from './tmdb-api';
 import { getWatchmodeNewReleases, getWatchmodeUpcoming } from './watchmode-api';
 
-const SERVICES = ['Netflix', 'Amazon Prime', 'Hulu', 'Disney+', 'Max', 'Apple TV+', 'Paramount+', 'Peacock'];
+const SERVICES = [
+  'Netflix', 
+  'Amazon Prime', 
+  'Hulu', 
+  'Disney+', 
+  'Max',
+  'HBO Max',
+  'Apple TV+', 
+  'Paramount+', 
+  'Peacock', 
+  'Showtime',
+  'Tubi',
+  'Pluto TV'
+];
 
 export async function getStreamingContent(mediaType: 'movie' | 'tv'): Promise<MediaItem[]> {
   try {
-    console.log('🎬 Fetching streaming content...');
+    console.log('🎬 Fetching streaming content from all services...');
     
-    // Try Watchmode first for all services
-    const watchmodePromises = SERVICES.map(service => getWatchmodeNewReleases(service));
+    // Fetch from all services in parallel
+    const watchmodePromises = SERVICES.map(service => 
+      getWatchmodeNewReleases(service).catch(err => {
+        console.error(`Failed to fetch ${service}:`, err);
+        return [];
+      })
+    );
+    
     const watchmodeResults = await Promise.all(watchmodePromises);
     const watchmodeContent = watchmodeResults.flat();
     
-    console.log(`📊 Watchmode total: ${watchmodeContent.length}`);
+    console.log(`📊 Watchmode total across all services: ${watchmodeContent.length}`);
+    
+    // Log per-service counts
+    SERVICES.forEach((service, idx) => {
+      console.log(`  ${service}: ${watchmodeResults[idx].length} items`);
+    });
     
     // Filter by media type if needed
     const filtered = mediaType === 'movie' || mediaType === 'tv'
@@ -40,14 +64,25 @@ export async function getStreamingContent(mediaType: 'movie' | 'tv'): Promise<Me
 
 export async function getUpcomingContent(mediaType: 'movie' | 'tv'): Promise<MediaItem[]> {
   try {
-    console.log('🎬 Fetching upcoming content...');
+    console.log('🎬 Fetching upcoming content from all services...');
     
-    // Try Watchmode first
-    const watchmodePromises = SERVICES.map(service => getWatchmodeUpcoming(service));
+    // Fetch upcoming from all services
+    const watchmodePromises = SERVICES.map(service => 
+      getWatchmodeUpcoming(service).catch(err => {
+        console.error(`Failed to fetch upcoming ${service}:`, err);
+        return [];
+      })
+    );
+    
     const watchmodeResults = await Promise.all(watchmodePromises);
     const watchmodeContent = watchmodeResults.flat();
     
     console.log(`📊 Watchmode upcoming total: ${watchmodeContent.length}`);
+    
+    // Log per-service counts
+    SERVICES.forEach((service, idx) => {
+      console.log(`  ${service} upcoming: ${watchmodeResults[idx].length} items`);
+    });
     
     // Filter by media type and ensure it's actually upcoming
     const today = new Date();
