@@ -4,7 +4,6 @@ const TMDB_KEY = process.env.NEXT_PUBLIC_TMDB_KEY || '';
 const OMDB_KEY = process.env.NEXT_PUBLIC_OMDB_KEY || '';
 const TMDB_BASE = 'https://api.themoviedb.org/3';
 
-// Each number gets ONE service - no repeating service names
 const PROVIDER_MAP: { [key: number]: string } = {
   2: 'Apple TV+',
   8: 'Netflix',
@@ -114,10 +113,6 @@ export async function getStreamingContent(mediaType: 'movie' | 'tv'): Promise<Me
             imdbId,
             year: (item.release_date || item.first_air_date)?.split('-')[0]
           });
-          
-          if (uniqueServices.some(s => ['Max', 'Apple TV+', 'Paramount+', 'Showtime'].includes(s))) {
-            console.log(`✓ ${item.title || item.name} on ${uniqueServices.join(', ')}`);
-          }
         } catch (err) {
           // Silent fail
         }
@@ -126,7 +121,8 @@ export async function getStreamingContent(mediaType: 'movie' | 'tv'): Promise<Me
     
     const serviceCounts: {[key: string]: number} = {};
     allItems.forEach(item => {
-      serviceCounts[item.service] = (serviceCounts[item.service] || 0) + 1;
+      const service = item.service || 'Unknown';
+      serviceCounts[service] = (serviceCounts[service] || 0) + 1;
     });
     
     console.log('📊 Streaming by service:');
@@ -250,8 +246,6 @@ export async function getUpcomingContent(mediaType: 'movie' | 'tv'): Promise<Med
             imdbId,
             year: releaseDate.split('-')[0]
           });
-          
-          console.log(`✓ ${item.title || item.name} - ${serviceName} - ${formattedDate}`);
         } catch (err) {
           // Silent
         }
@@ -260,7 +254,8 @@ export async function getUpcomingContent(mediaType: 'movie' | 'tv'): Promise<Med
     
     const serviceCounts: {[key: string]: number} = {};
     allItems.forEach(item => {
-      serviceCounts[item.service] = (serviceCounts[item.service] || 0) + 1;
+      const service = item.service || 'Unknown';
+      serviceCounts[service] = (serviceCounts[service] || 0) + 1;
     });
     
     console.log('📊 Upcoming by service:');
