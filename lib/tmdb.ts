@@ -4,6 +4,7 @@ const TMDB_KEY = process.env.NEXT_PUBLIC_TMDB_KEY || '';
 const OMDB_KEY = process.env.NEXT_PUBLIC_OMDB_KEY || '';
 const TMDB_BASE = 'https://api.themoviedb.org/3';
 
+// ALL known TMDB provider IDs - mapped to clean service names
 const PROVIDER_MAP: { [key: number]: string } = {
   2: 'Apple TV+',
   8: 'Netflix',
@@ -38,6 +39,7 @@ export async function getStreamingContent(mediaType: 'movie' | 'tv'): Promise<Me
     const endpoint = mediaType === 'movie' ? 'movie/popular' : 'tv/popular';
     const allItems: MediaItem[] = [];
     const seenIds = new Set<string>();
+    const unknownProviders = new Set<number>();
     
     console.log('📡 Fetching streaming content...');
     
@@ -70,7 +72,16 @@ export async function getStreamingContent(mediaType: 'movie' | 'tv'): Promise<Me
             ...(usProviders.flatrate || []),
             ...(usProviders.free || []),
             ...(usProviders.ads || []),
+            ...(usProviders.buy || []),
+            ...(usProviders.rent || []),
           ];
+          
+          // Log unknown providers
+          allProviders.forEach((p: any) => {
+            if (!PROVIDER_MAP[p.provider_id]) {
+              unknownProviders.add(p.provider_id);
+            }
+          });
           
           const serviceList = allProviders
             .filter((p: any) => PROVIDER_MAP[p.provider_id])
@@ -130,6 +141,10 @@ export async function getStreamingContent(mediaType: 'movie' | 'tv'): Promise<Me
       console.log(`  ${service}: ${count}`);
     });
     
+    if (unknownProviders.size > 0) {
+      console.log('🔍 Unknown provider IDs found:', Array.from(unknownProviders).join(', '));
+    }
+    
     return allItems;
   } catch (error) {
     console.error('❌ Error:', error);
@@ -149,6 +164,7 @@ export async function getUpcomingContent(mediaType: 'movie' | 'tv'): Promise<Med
     const seenIds = new Set<string>();
     
     console.log('📡 Fetching upcoming...');
+    console.log('⚠️  NOTE: Streaming services for upcoming content are often TBA until closer to release');
     
     const threeMonths = new Date(today.getTime() + 90 * 24 * 60 * 60 * 1000);
     const startDate = today.toISOString().split('T')[0];
@@ -193,7 +209,9 @@ export async function getUpcomingContent(mediaType: 'movie' | 'tv'): Promise<Med
               const allProviders = [
                 ...(usProviders.flatrate || []),
                 ...(usProviders.free || []),
-                ...(usProviders.ads || [])
+                ...(usProviders.ads || []),
+                ...(usProviders.buy || []),
+                ...(usProviders.rent || []),
               ];
               
               const providerServices = allProviders
