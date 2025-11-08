@@ -41,7 +41,7 @@ export async function getStreamingInfoWithAI(title: string, year: string, releas
     }
     
     const data = await response.json();
-    const content = data.choices[0]?.message?.content?.trim();
+    const content = data.choices?.[0]?.message?.content?.trim();
     
     if (!content) return null;
     
@@ -78,7 +78,7 @@ export async function enhanceUpcomingWithAI(items: MediaItem[]): Promise<MediaIt
   
   console.log(`🤖 Enhancing ${tbaItems.length} TBA items with AI...`);
   
-  let enhanced_count = 0;
+  let enhancedCount = 0;
   
   for (const item of tbaItems) {
     try {
@@ -102,7 +102,7 @@ export async function enhanceUpcomingWithAI(items: MediaItem[]): Promise<MediaIt
           });
         }
         
-        enhanced_count++;
+        enhancedCount++;
       }
       
       // Small delay to avoid rate limits
@@ -113,7 +113,7 @@ export async function enhanceUpcomingWithAI(items: MediaItem[]): Promise<MediaIt
     }
   }
   
-  console.log(`✅ AI enhanced ${enhanced_count} items`);
+  console.log(`✅ AI enhanced ${enhancedCount} items`);
   
   return enhanced;
 }
