@@ -85,7 +85,7 @@ export async function enhanceUpcomingWithAI(items: MediaItem[]): Promise<MediaIt
       const aiResult = await getStreamingInfoWithAI(
         item.title,
         item.year || '',
-        item.availableDate
+        item.availableDate || 'TBA'
       );
       
       if (aiResult && aiResult.service !== 'TBA') {
