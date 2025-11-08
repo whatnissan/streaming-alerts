@@ -28,7 +28,6 @@ const SERVICE_MAP: { [key: string]: string } = {
   'apple': 'Apple TV+',
   'paramount': 'Paramount+',
   'peacock': 'Peacock',
-  'showtime': 'Showtime',
 };
 
 async function getOMDbRating(imdbId: string): Promise<string> {
@@ -43,11 +42,7 @@ async function getOMDbRating(imdbId: string): Promise<string> {
 
 async function getStreamingAvailability(service: string): Promise<MediaItem[]> {
   try {
-    // Streaming Availability API v4 format - CORRECTED
-    // Format: catalogs=SERVICE.TYPE where TYPE is subscription, free, addon, buy, rent
-    const url = `https://streaming-availability.p.rapidapi.com/shows/search/filters?country=us&catalogs=${service}.subscription&order_by=popularity_1month&output_language=en`;
-    
-    console.log(`📡 Calling Streaming API: ${service}`);
+    const url = `https://streaming-availability.p.rapidapi.com/shows/search/filters?country=us&catalogs=${service}.subscription&order_by=popularity_1month&output_language=en&show_original_language=en`;
     
     const response = await fetch(url, {
       method: 'GET',
@@ -58,24 +53,20 @@ async function getStreamingAvailability(service: string): Promise<MediaItem[]> {
       cache: 'no-store'
     });
     
-    console.log(`Response ${service}: ${response.status}`);
-    
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`❌ ${service}: ${response.status} - ${errorText.substring(0, 300)}`);
+      console.error(`❌ ${service}: ${response.status}`);
       return [];
     }
     
     const data = await response.json();
     
     if (!data || !data.shows || data.shows.length === 0) {
-      console.log(`⚠️ ${service}: No shows returned`);
       return [];
     }
     
-    console.log(`✅ ${service}: ${data.shows.length} shows found`);
+    console.log(`✅ ${service}: ${data.shows.length} shows`);
     
-    const items: MediaItem[] = data.shows.slice(0, 50).map((show: any) => {
+    const items: MediaItem[] = data.shows.map((show: any) => {
       let posterPath = null;
       if (show.imageSet?.verticalPoster?.w480) {
         posterPath = show.imageSet.verticalPoster.w480;
@@ -101,106 +92,79 @@ async function getStreamingAvailability(service: string): Promise<MediaItem[]> {
       };
     });
     
-    console.log(`✓ Processed ${items.length} items from ${SERVICE_MAP[service]}`);
     return items;
     
   } catch (error: any) {
-    console.error(`❌ Exception for ${service}:`, error.message);
+    console.error(`❌ ${service}:`, error.message);
     return [];
   }
 }
 
-async function getTMDBStreamingFallback(mediaType: 'movie' | 'tv'): Promise<MediaItem[]> {
-  if (!TMDB_KEY) return [];
-  
+async function getUpcomingFromStreamingAPI(service: string): Promise<MediaItem[]> {
   try {
-    const endpoint = mediaType === 'movie' ? 'movie/popular' : 'tv/popular';
-    const allItems: MediaItem[] = [];
-    const seenIds = new Set<string>();
+    // Get upcoming releases for this service
+    const url = `https://streaming-availability.p.rapidapi.com/changes?country=us&catalogs=${service}.subscription&change_type=upcoming&item_type=show&show_type=movie&show_type=series&order_direction=asc`;
     
-    console.log('📡 TMDB Fallback...');
+    console.log(`📅 Fetching upcoming for ${service}...`);
     
-    for (let page = 1; page <= 5; page++) {
-      const url = `${TMDB_BASE}/${endpoint}?api_key=${TMDB_KEY}&language=en-US&page=${page}`;
-      const response = await fetch(url, { cache: 'no-store' });
-      
-      if (!response.ok) continue;
-      
-      const data = await response.json();
-      const results = data.results || [];
-      
-      for (const item of results) {
-        const itemId = `${mediaType}-${item.id}`;
-        if (seenIds.has(itemId)) continue;
-        seenIds.add(itemId);
-        
-        try {
-          const providerUrl = `${TMDB_BASE}/${mediaType}/${item.id}/watch/providers?api_key=${TMDB_KEY}`;
-          const providerRes = await fetch(providerUrl, { cache: 'no-store' });
-          
-          if (!providerRes.ok) continue;
-          
-          const providerData = await providerRes.json();
-          const usProviders = providerData.results?.US;
-          
-          if (!usProviders) continue;
-          
-          const allProviders = [
-            ...(usProviders.flatrate || []),
-            ...(usProviders.free || []),
-            ...(usProviders.ads || []),
-          ];
-          
-          const serviceList = allProviders
-            .filter((p: any) => PROVIDER_MAP[p.provider_id])
-            .map((p: any) => PROVIDER_MAP[p.provider_id] as string);
-          
-          if (serviceList.length === 0) continue;
-          
-          const uniqueServices: string[] = Array.from(new Set(serviceList));
-          
-          const detailUrl = `${TMDB_BASE}/${mediaType}/${item.id}/external_ids?api_key=${TMDB_KEY}`;
-          const detailRes = await fetch(detailUrl, { cache: 'no-store' });
-          let imdbId = '';
-          let imdbRating = '';
-          
-          if (detailRes.ok) {
-            const detailData = await detailRes.json();
-            imdbId = detailData.imdb_id || '';
-            if (imdbId) {
-              imdbRating = await getOMDbRating(imdbId);
-            }
-          }
-          
-          const genreIds: string[] = Array.isArray(item.genre_ids) 
-            ? item.genre_ids.map((id: number) => id.toString()) 
-            : [];
-          
-          allItems.push({
-            id: `tmdb-${item.id}`,
-            title: item.title || item.name,
-            overview: item.overview || 'No description available',
-            poster_path: item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : null,
-            release_date: item.release_date || item.first_air_date || '',
-            vote_average: item.vote_average || 0,
-            genre_ids: genreIds,
-            media_type: mediaType,
-            providers: uniqueServices,
-            service: uniqueServices[0],
-            availableDate: 'Streaming Now',
-            imdbRating,
-            imdbId,
-            year: (item.release_date || item.first_air_date)?.split('-')[0]
-          });
-        } catch (err) {
-          // Silent
-        }
-      }
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'X-RapidAPI-Key': RAPID_API_KEY,
+        'X-RapidAPI-Host': 'streaming-availability.p.rapidapi.com'
+      },
+      cache: 'no-store'
+    });
+    
+    if (!response.ok) {
+      console.error(`❌ Upcoming ${service}: ${response.status}`);
+      return [];
     }
     
-    console.log(`✓ TMDB: ${allItems.length} items`);
-    return allItems;
-  } catch (error) {
+    const data = await response.json();
+    
+    if (!data || !data.changes || data.changes.length === 0) {
+      console.log(`No upcoming for ${service}`);
+      return [];
+    }
+    
+    console.log(`✅ Upcoming ${service}: ${data.changes.length} items`);
+    
+    const items: MediaItem[] = data.changes.slice(0, 30).map((change: any) => {
+      const show = change.show;
+      let posterPath = null;
+      if (show.imageSet?.verticalPoster?.w480) {
+        posterPath = show.imageSet.verticalPoster.w480;
+      }
+      
+      // Get the streaming date from the change timestamp
+      const streamingDate = change.timestamp ? new Date(change.timestamp * 1000) : null;
+      const formattedDate = streamingDate 
+        ? streamingDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+        : 'Coming Soon';
+      
+      return {
+        id: `sa-upcoming-${show.id}`,
+        title: show.title,
+        overview: show.overview || 'No description available',
+        poster_path: posterPath,
+        release_date: streamingDate ? streamingDate.toISOString().split('T')[0] : '',
+        vote_average: (show.rating || 0) * 10,
+        genre_ids: (show.genres || []).map((g: any) => g.id?.toString() || ''),
+        media_type: show.showType === 'movie' ? 'movie' : 'tv',
+        providers: [SERVICE_MAP[service] || service],
+        service: SERVICE_MAP[service] || service,
+        availableDate: formattedDate,
+        imdbRating: show.rating?.toString() || '',
+        imdbId: show.imdbId || '',
+        year: show.releaseYear?.toString() || show.firstAirYear?.toString() || ''
+      };
+    });
+    
+    return items;
+    
+  } catch (error: any) {
+    console.error(`❌ Upcoming ${service}:`, error.message);
     return [];
   }
 }
@@ -323,14 +287,13 @@ async function getTMDBUpcomingFallback(mediaType: 'movie' | 'tv'): Promise<Media
 
 export async function getStreamingContent(mediaType: 'movie' | 'tv'): Promise<MediaItem[]> {
   try {
-    console.log('🎬 Fetching streaming content...');
-    console.log('Using Streaming Availability API v4...');
+    console.log('🎬 Fetching from Streaming Availability API...');
     
-    const services = ['netflix', 'prime', 'hulu', 'disney', 'hbo', 'apple', 'paramount', 'peacock', 'showtime'];
+    const services = ['netflix', 'prime', 'hulu', 'disney', 'hbo', 'apple', 'paramount', 'peacock'];
     
     const streamingPromises = services.map(service => 
       getStreamingAvailability(service).catch((err) => {
-        console.error(`Failed to fetch ${service}:`, err);
+        console.error(`Failed ${service}:`, err);
         return [];
       })
     );
@@ -338,9 +301,9 @@ export async function getStreamingContent(mediaType: 'movie' | 'tv'): Promise<Me
     const streamingResults = await Promise.all(streamingPromises);
     const streamingItems = streamingResults.flat();
     
-    console.log(`📊 Streaming API returned: ${streamingItems.length} total items`);
+    console.log(`📊 Streaming API: ${streamingItems.length} total items`);
     
-    if (streamingItems.length >= 50) {
+    if (streamingItems.length > 0) {
       const filtered = streamingItems.filter(item => 
         mediaType === 'movie' ? item.media_type === 'movie' : item.media_type === 'tv'
       );
@@ -351,19 +314,45 @@ export async function getStreamingContent(mediaType: 'movie' | 'tv'): Promise<Me
         serviceCounts[service] = (serviceCounts[service] || 0) + 1;
       });
       
-      console.log('📊 Results by service:');
+      console.log('📊 By service:');
       Object.entries(serviceCounts).sort((a, b) => b[1] - a[1]).forEach(([service, count]) => {
         console.log(`  ${service}: ${count}`);
       });
       
-      console.log(`✅ Using Streaming API: ${filtered.length} items`);
+      console.log(`✅ Total: ${filtered.length} items`);
       return filtered;
     }
     
-    console.log('⚠️ Streaming API insufficient, using TMDB fallback...');
-    const tmdbItems = await getTMDBStreamingFallback(mediaType);
+    return [];
     
-    const combined = [...streamingItems, ...tmdbItems];
+  } catch (error) {
+    console.error('❌ Error:', error);
+    return [];
+  }
+}
+
+export async function getUpcomingContent(mediaType: 'movie' | 'tv'): Promise<MediaItem[]> {
+  try {
+    console.log('🎬 Fetching upcoming from Streaming API...');
+    
+    const services = ['netflix', 'prime', 'hulu', 'disney', 'hbo', 'apple', 'paramount', 'peacock'];
+    
+    // Get upcoming from Streaming API
+    const upcomingPromises = services.map(service => 
+      getUpcomingFromStreamingAPI(service).catch(() => [])
+    );
+    
+    const upcomingResults = await Promise.all(upcomingPromises);
+    const upcomingItems = upcomingResults.flat();
+    
+    console.log(`📊 Streaming API upcoming: ${upcomingItems.length} items`);
+    
+    // Also get TMDB data to supplement
+    const tmdbItems = await getTMDBUpcomingFallback(mediaType);
+    console.log(`📊 TMDB upcoming: ${tmdbItems.length} items`);
+    
+    // Combine both
+    const combined = [...upcomingItems, ...tmdbItems];
     const seen = new Set<string>();
     const deduplicated = combined.filter(item => {
       const key = `${item.title.toLowerCase()}-${item.year}`;
@@ -376,18 +365,25 @@ export async function getStreamingContent(mediaType: 'movie' | 'tv'): Promise<Me
       mediaType === 'movie' ? item.media_type === 'movie' : item.media_type === 'tv'
     );
     
-    console.log(`✅ Total: ${filtered.length} items (${streamingItems.length} from Streaming API, ${tmdbItems.length} from TMDB)`);
+    const serviceCounts: {[key: string]: number} = {};
+    filtered.forEach(item => {
+      const service = item.service || 'Unknown';
+      serviceCounts[service] = (serviceCounts[service] || 0) + 1;
+    });
     
-    return filtered;
+    console.log('📊 Upcoming by service:');
+    Object.entries(serviceCounts).sort((a, b) => b[1] - a[1]).forEach(([service, count]) => {
+      console.log(`  ${service}: ${count}`);
+    });
+    
+    console.log(`✅ Total upcoming: ${filtered.length} items`);
+    
+    return filtered.sort((a, b) => new Date(a.release_date).getTime() - new Date(b.release_date).getTime());
     
   } catch (error) {
-    console.error('❌ Fatal error:', error);
-    return getTMDBStreamingFallback(mediaType);
+    console.error('❌ Error:', error);
+    return getTMDBUpcomingFallback(mediaType);
   }
-}
-
-export async function getUpcomingContent(mediaType: 'movie' | 'tv'): Promise<MediaItem[]> {
-  return getTMDBUpcomingFallback(mediaType);
 }
 
 export async function searchContent(query: string, mediaType: 'movie' | 'tv'): Promise<MediaItem[]> {
