@@ -1,4 +1,5 @@
 import { MediaItem } from './types';
+import { enhanceUpcomingWithAI } from './openai-helper';
 
 const TMDB_KEY = process.env.NEXT_PUBLIC_TMDB_KEY || '';
 const OMDB_KEY = process.env.NEXT_PUBLIC_OMDB_KEY || '';
@@ -53,15 +54,10 @@ async function getStreamingAvailability(service: string): Promise<MediaItem[]> {
       cache: 'no-store'
     });
     
-    if (!response.ok) {
-      return [];
-    }
+    if (!response.ok) return [];
     
     const data = await response.json();
-    
-    if (!data || !data.shows || data.shows.length === 0) {
-      return [];
-    }
+    if (!data || !data.shows || data.shows.length === 0) return [];
     
     const items: MediaItem[] = data.shows.map((show: any) => {
       let posterPath = null;
@@ -90,7 +86,6 @@ async function getStreamingAvailability(service: string): Promise<MediaItem[]> {
     });
     
     return items;
-    
   } catch (error: any) {
     return [];
   }
@@ -310,7 +305,6 @@ export async function getStreamingContent(mediaType: 'movie' | 'tv'): Promise<Me
     
     const services = ['netflix', 'prime', 'hulu', 'disney', 'hbo', 'apple', 'paramount', 'peacock'];
     
-    // Get from Streaming API
     const streamingPromises = services.map(service => 
       getStreamingAvailability(service).catch(() => [])
     );
@@ -320,11 +314,9 @@ export async function getStreamingContent(mediaType: 'movie' | 'tv'): Promise<Me
     
     console.log(`Streaming API: ${streamingItems.length} items`);
     
-    // Get from TMDB
     const tmdbItems = await getTMDBStreamingFallback(mediaType);
     console.log(`TMDB: ${tmdbItems.length} items`);
     
-    // Combine and deduplicate
     const combined = [...streamingItems, ...tmdbItems];
     const seen = new Set<string>();
     const deduplicated = combined.filter(item => {
@@ -348,9 +340,35 @@ export async function getStreamingContent(mediaType: 'movie' | 'tv'): Promise<Me
 }
 
 export async function getUpcomingContent(mediaType: 'movie' | 'tv'): Promise<MediaItem[]> {
-  // Streaming API doesn't have a working upcoming endpoint
-  // Use TMDB only for now
-  return getTMDBUpcomingFallback(mediaType);
+  try {
+    console.log('🎬 Fetching upcoming content...');
+    
+    // Get TMDB upcoming
+    const tmdbItems = await getTMDBUpcomingFallback(mediaType);
+    console.log(`📊 TMDB upcoming: ${tmdbItems.length} items`);
+    
+    // Enhance TBA items with AI
+    console.log('🤖 Enhancing with OpenAI...');
+    const enhanced = await enhanceUpcomingWithAI(tmdbItems);
+    
+    const serviceCounts: {[key: string]: number} = {};
+    enhanced.forEach(item => {
+      const service = item.service || 'Unknown';
+      serviceCounts[service] = (serviceCounts[service] || 0) + 1;
+    });
+    
+    console.log('📊 Upcoming by service:');
+    Object.entries(serviceCounts).sort((a, b) => b[1] - a[1]).forEach(([service, count]) => {
+      console.log(`  ${service}: ${count}`);
+    });
+    
+    console.log(`✅ Total upcoming: ${enhanced.length} items`);
+    return enhanced;
+    
+  } catch (error) {
+    console.error('❌ Error:', error);
+    return getTMDBUpcomingFallback(mediaType);
+  }
 }
 
 export async function searchContent(query: string, mediaType: 'movie' | 'tv'): Promise<MediaItem[]> {
