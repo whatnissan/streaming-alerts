@@ -43,24 +43,32 @@ async function getOMDbRating(imdbId: string): Promise<string> {
 
 async function getStreamingAvailability(service: string): Promise<MediaItem[]> {
   try {
-    const url = `https://streaming-availability.p.rapidapi.com/shows/search/filters?country=us&services=${service}&show_type=movie,series&order_by=popularity`;
+    // Updated API v4 format - correct endpoint
+    const url = `https://streaming-availability.p.rapidapi.com/shows/search/filters?country=us&catalogs=${service}.subscription&show_type=movie&show_type=series&order_by=popularity_1month`;
+    
+    console.log(`Calling Streaming API for ${service}...`);
     
     const response = await fetch(url, {
+      method: 'GET',
       headers: {
-        'x-rapidapi-host': 'streaming-availability.p.rapidapi.com',
-        'x-rapidapi-key': RAPID_API_KEY
+        'X-RapidAPI-Key': RAPID_API_KEY,
+        'X-RapidAPI-Host': 'streaming-availability.p.rapidapi.com'
       },
       cache: 'no-store'
     });
     
+    console.log(`${service} response: ${response.status}`);
+    
     if (!response.ok) {
-      console.error(`Streaming API error for ${service}: ${response.status}`);
+      const errorText = await response.text();
+      console.error(`Streaming API error for ${service}: ${response.status} - ${errorText.substring(0, 200)}`);
       return [];
     }
     
     const data = await response.json();
     
     if (!data || !data.shows) {
+      console.log(`No shows data for ${service}`);
       return [];
     }
     
@@ -68,6 +76,8 @@ async function getStreamingAvailability(service: string): Promise<MediaItem[]> {
       let posterPath = null;
       if (show.imageSet?.verticalPoster?.w480) {
         posterPath = show.imageSet.verticalPoster.w480;
+      } else if (show.imageSet?.horizontalPoster?.w480) {
+        posterPath = show.imageSet.horizontalPoster.w480;
       }
       
       return {
@@ -75,23 +85,23 @@ async function getStreamingAvailability(service: string): Promise<MediaItem[]> {
         title: show.title,
         overview: show.overview || 'No description available',
         poster_path: posterPath,
-        release_date: show.releaseYear?.toString() || '',
+        release_date: show.releaseYear?.toString() || show.firstAirYear?.toString() || '',
         vote_average: show.rating || 0,
-        genre_ids: (show.genres || []).map((g: any) => g.id?.toString() || ''),
+        genre_ids: (show.genres || []).map((g: any) => g.id?.toString() || g.name || ''),
         media_type: show.showType === 'movie' ? 'movie' : 'tv',
         providers: [SERVICE_MAP[service] || service],
         service: SERVICE_MAP[service] || service,
         availableDate: 'Streaming Now',
         imdbRating: show.rating?.toString() || '',
         imdbId: show.imdbId || '',
-        year: show.releaseYear?.toString() || ''
+        year: show.releaseYear?.toString() || show.firstAirYear?.toString() || ''
       };
     });
     
     console.log(`✓ Streaming API: ${items.length} from ${SERVICE_MAP[service]}`);
     return items;
-  } catch (error) {
-    console.error(`Streaming API error for ${service}:`, error);
+  } catch (error: any) {
+    console.error(`Streaming API exception for ${service}:`, error.message);
     return [];
   }
 }
@@ -309,46 +319,11 @@ async function getTMDBUpcomingFallback(mediaType: 'movie' | 'tv'): Promise<Media
 
 export async function getStreamingContent(mediaType: 'movie' | 'tv'): Promise<MediaItem[]> {
   try {
-    console.log('🎬 Fetching streaming...');
+    console.log('🎬 Fetching streaming content...');
     
-    const services = ['netflix', 'prime', 'hulu', 'disney', 'hbo', 'apple', 'paramount', 'peacock', 'showtime'];
-    
-    const streamingPromises = services.map(service => 
-      getStreamingAvailability(service).catch(() => [])
-    );
-    
-    const streamingResults = await Promise.all(streamingPromises);
-    const streamingItems = streamingResults.flat();
-    
-    console.log(`Streaming API: ${streamingItems.length}`);
-    
-    if (streamingItems.length >= 100) {
-      const filtered = streamingItems.filter(item => 
-        mediaType === 'movie' ? item.media_type === 'movie' : item.media_type === 'tv'
-      );
-      
-      console.log(`✅ Using Streaming API: ${filtered.length}`);
-      return filtered;
-    }
-    
-    console.log('Using TMDB fallback...');
-    const tmdbItems = await getTMDBStreamingFallback(mediaType);
-    
-    const combined = [...streamingItems, ...tmdbItems];
-    const seen = new Set<string>();
-    const deduplicated = combined.filter(item => {
-      const key = `${item.title.toLowerCase()}-${item.year}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-    
-    const filtered = deduplicated.filter(item => 
-      mediaType === 'movie' ? item.media_type === 'movie' : item.media_type === 'tv'
-    );
-    
-    console.log(`✅ Total: ${filtered.length}`);
-    return filtered;
+    // Just use TMDB - Streaming Availability API v4 requires different setup
+    console.log('Using TMDB (Streaming API v4 migration needed)...');
+    return getTMDBStreamingFallback(mediaType);
     
   } catch (error) {
     console.error('Error:', error);
