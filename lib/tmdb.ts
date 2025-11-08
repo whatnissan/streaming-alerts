@@ -1,26 +1,67 @@
 import { MediaItem } from './types';
-import { getStreamingAvailability, getUpcomingFromStreaming } from './streaming-availability-api';
+import { getStreamingAvailability, getNewReleases } from './streaming-availability-api';
+import { getTMDBStreamingFallback, getTMDBUpcomingFallback } from './tmdb-fallback';
 
 const TMDB_KEY = process.env.NEXT_PUBLIC_TMDB_KEY || '';
-const OMDB_KEY = process.env.NEXT_PUBLIC_OMDB_KEY || '';
 
 export async function getStreamingContent(mediaType: 'movie' | 'tv'): Promise<MediaItem[]> {
   try {
-    console.log('📡 Fetching from Streaming Availability API...');
+    console.log('🎬 Fetching streaming content...');
+    console.log('Trying Streaming Availability API first...');
     
     const services = ['netflix', 'prime', 'hulu', 'disney', 'hbo', 'apple', 'paramount', 'peacock', 'showtime'];
     
-    const promises = services.map(service => getStreamingAvailability(service));
-    const results = await Promise.all(promises);
-    
-    const allItems = results.flat();
-    
-    // Filter by media type
-    const filtered = allItems.filter(item => 
-      mediaType === 'movie' ? item.media_type === 'movie' : item.media_type === 'tv'
+    // Try Streaming Availability API
+    const streamingPromises = services.map(service => 
+      getStreamingAvailability(service).catch(err => {
+        console.error(`Failed ${service}:`, err.message);
+        return [];
+      })
     );
     
-    console.log(`📊 Total items: ${filtered.length}`);
+    const streamingResults = await Promise.all(streamingPromises);
+    const streamingItems = streamingResults.flat();
+    
+    console.log(`📊 Streaming Availability API: ${streamingItems.length} items`);
+    
+    // If we got good data from Streaming API, use it
+    if (streamingItems.length >= 100) {
+      const filtered = streamingItems.filter(item => 
+        mediaType === 'movie' ? item.media_type === 'movie' : item.media_type === 'tv'
+      );
+      
+      const serviceCounts: {[key: string]: number} = {};
+      filtered.forEach(item => {
+        const service = item.service || 'Unknown';
+        serviceCounts[service] = (serviceCounts[service] || 0) + 1;
+      });
+      
+      console.log('📊 Streaming API results by service:');
+      Object.entries(serviceCounts).sort((a, b) => b[1] - a[1]).forEach(([service, count]) => {
+        console.log(`  ${service}: ${count}`);
+      });
+      
+      console.log(`✅ Using Streaming API: ${filtered.length} items`);
+      return filtered;
+    }
+    
+    // Fallback to TMDB
+    console.log('⚠️  Streaming API returned insufficient data, using TMDB...');
+    const tmdbItems = await getTMDBStreamingFallback(mediaType);
+    
+    // Combine both sources if we got some from Streaming API
+    const combined = [...streamingItems, ...tmdbItems];
+    const seen = new Set<string>();
+    const deduplicated = combined.filter(item => {
+      const key = `${item.title.toLowerCase()}-${item.year}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    
+    const filtered = deduplicated.filter(item => 
+      mediaType === 'movie' ? item.media_type === 'movie' : item.media_type === 'tv'
+    );
     
     const serviceCounts: {[key: string]: number} = {};
     filtered.forEach(item => {
@@ -28,34 +69,48 @@ export async function getStreamingContent(mediaType: 'movie' | 'tv'): Promise<Me
       serviceCounts[service] = (serviceCounts[service] || 0) + 1;
     });
     
-    console.log('📊 By service:');
+    console.log('📊 Combined results by service:');
     Object.entries(serviceCounts).sort((a, b) => b[1] - a[1]).forEach(([service, count]) => {
       console.log(`  ${service}: ${count}`);
     });
     
+    console.log(`✅ Total: ${filtered.length} items (${streamingItems.length} from Streaming API, ${tmdbItems.length} from TMDB)`);
+    
     return filtered;
+    
   } catch (error) {
-    console.error('❌ Error:', error);
-    return [];
+    console.error('❌ Fatal error, using TMDB only:', error);
+    return getTMDBStreamingFallback(mediaType);
   }
 }
 
 export async function getUpcomingContent(mediaType: 'movie' | 'tv'): Promise<MediaItem[]> {
   try {
-    console.log('📡 Fetching upcoming from Streaming Availability API...');
+    console.log('🎬 Fetching upcoming content...');
     
-    const services = ['netflix', 'prime', 'hulu', 'disney', 'hbo', 'apple', 'paramount', 'peacock', 'showtime'];
+    // Try to get new releases from Streaming API first
+    const newReleases = await getNewReleases().catch(() => []);
     
-    const promises = services.map(service => getUpcomingFromStreaming(service));
-    const results = await Promise.all(promises);
+    console.log(`📊 Streaming API new releases: ${newReleases.length}`);
     
-    const allItems = results.flat();
+    // Always get TMDB upcoming for more comprehensive data
+    const tmdbUpcoming = await getTMDBUpcomingFallback(mediaType);
     
-    const filtered = allItems.filter(item => 
+    console.log(`📊 TMDB upcoming: ${tmdbUpcoming.length}`);
+    
+    // Combine both sources
+    const combined = [...newReleases, ...tmdbUpcoming];
+    const seen = new Set<string>();
+    const deduplicated = combined.filter(item => {
+      const key = `${item.title.toLowerCase()}-${item.year}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    
+    const filtered = deduplicated.filter(item => 
       mediaType === 'movie' ? item.media_type === 'movie' : item.media_type === 'tv'
     );
-    
-    console.log(`📊 Total upcoming: ${filtered.length}`);
     
     const serviceCounts: {[key: string]: number} = {};
     filtered.forEach(item => {
@@ -68,10 +123,13 @@ export async function getUpcomingContent(mediaType: 'movie' | 'tv'): Promise<Med
       console.log(`  ${service}: ${count}`);
     });
     
+    console.log(`✅ Total upcoming: ${filtered.length} items`);
+    
     return filtered.sort((a, b) => new Date(a.release_date).getTime() - new Date(b.release_date).getTime());
+    
   } catch (error) {
     console.error('❌ Error:', error);
-    return [];
+    return getTMDBUpcomingFallback(mediaType);
   }
 }
 
